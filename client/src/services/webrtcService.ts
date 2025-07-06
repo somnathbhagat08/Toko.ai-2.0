@@ -66,6 +66,7 @@ class WebRTCService {
         socketService.sendAnswer(this.roomId, answer);
       } catch (error) {
         console.error('Error handling offer:', error);
+        this.onError?.(`Video call error (offer): ${error.message}`);
       }
     });
 
