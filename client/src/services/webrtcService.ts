@@ -131,6 +131,7 @@ class WebRTCService {
       return stream;
     } catch (error) {
       console.error('Error accessing media devices:', error);
+      this.onError?.(`Failed to access camera/microphone: ${error.message}`);
       throw error;
     }
   }
@@ -178,6 +179,7 @@ class WebRTCService {
   // Callback handlers (to be set by components)
   onRemoteStreamReceived?: (stream: MediaStream) => void;
   onConnectionStateChange?: (state: string) => void;
+  onError?: (error: string) => void;
 
   // Getters
   getLocalStream(): MediaStream | null {
