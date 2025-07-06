@@ -1,0 +1,78 @@
+Change 4: Modify the catch block in getUserMedia
+
+Find the getUserMedia async method. Locate the catch block. Add the this.onError?.(...) call inside this block:
+
+async getUserMedia(constraints: MediaStreamConstraints): Promise<MediaStream> {
+  try {
+    // ... existing code ...
+  } catch (error) {
+    console.error('Error accessing media devices:', error);
+    this.onError?.(`Failed to access camera/microphone: ${error.message}`); // Add this line
+    throw error; // Keep the throw error
+  }
+}
+
+
+Change 5: Modify the catch block in onWebRTCOffer
+
+Find the setupSocketHandlers private method. Within it, locate the socketService.onWebRTCOffer handler. Find the catch block within this handler. Add the this.onError?.(...) call inside this block:
+
+private setupSocketHandlers() {
+  // Handle incoming offers
+  socketService.onWebRTCOffer(async (data) => {
+    // ... existing code ...
+
+    try {
+      // ... existing code ...
+    } catch (error) {
+      console.error('Error handling offer:', error);
+      this.onError?.(`Video call error (offer): ${error.message}`); // Add this line
+    }
+  });
+
+  // ... rest of the handlers
+}
+
+
+Change 6: Modify the catch block in onWebRTCAnswer
+
+Within the setupSocketHandlers private method, locate the socketService.onWebRTCAnswer handler. Find the catch block within this handler. Add the this.onError?.(...) call inside this block:
+
+private setupSocketHandlers() {
+  // ... onWebRTCOffer handler ...
+
+  // Handle incoming answers
+  socketService.onWebRTCAnswer(async (data) => {
+    // ... existing code ...
+
+    try {
+      // ... existing code ...
+    } catch (error) {
+      console.error('Error handling answer:', error);
+      this.onError?.(`Video call error (answer): ${error.message}`); // Add this line
+    }
+  });
+
+  // ... rest of the handlers
+}
+
+
+Change 7: Modify the catch block in onWebRTCIceCandidate
+
+Within the setupSocketHandlers private method, locate the socketService.onWebRTCIceCandidate handler. Find the catch block within this handler. Add the this.onError?.(...) call inside this block:
+
+private setupSocketHandlers() {
+  // ... onWebRTCOffer and onWebRTCAnswer handlers ...
+
+  // Handle incoming ICE candidates
+  socketService.onWebRTCIceCandidate(async (data) => {
+    // ... existing code ...
+
+    try {
+      // ... existing code ...
+    } catch (error) {
+      console.error('Error adding ICE candidate:', error);
+      this.onError?.(`Video call error (ICE candidate): ${error.message}`); // Add this line
+    }
+  });
+}
