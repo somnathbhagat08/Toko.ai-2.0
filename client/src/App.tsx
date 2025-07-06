@@ -47,9 +47,19 @@ function App() {
         setIsConnecting(true);
       });
 
+      // Handle connection errors
+      socketService.onError?.((error) => {
+        console.error('Socket error:', error);
+        setIsConnecting(false);
+        // Reset to home page on connection error
+        setIsInChat(false);
+      });
+
     } catch (error) {
       console.error('Failed to connect to server:', error);
-      // You might want to show an error message to the user here
+      setIsConnecting(false);
+      setIsInChat(false);
+      // Could show a toast notification here
     }
   };
 

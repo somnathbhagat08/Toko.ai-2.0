@@ -34,6 +34,8 @@ async function rateLimitMiddleware(req: any, res: any, next: any) {
   next();
 }
 
+let io: SocketIOServer;
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Apply rate limiting to all API routes
   app.use('/api', rateLimitMiddleware);
@@ -295,7 +297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   
   // Setup Socket.IO
-  const io = new SocketIOServer(httpServer, {
+  io = new SocketIOServer(httpServer, {
     cors: {
       origin: "*",
       methods: ["GET", "POST"]
