@@ -7,7 +7,7 @@ import { log } from '../vite.js';
 
 interface AuthTokenPayload {
   userId: string;
-  email: string;
+  phoneNumber: string;
   name: string;
   avatar?: string;
   permissions: string[];
@@ -52,32 +52,28 @@ class AuthService {
   }
 
   /**
-   * Register a new user
+   * Register a new user (Phone Authentication)
    */
   async register(userData: {
-    email: string;
-    password: string;
+    phoneNumber: string;
     name: string;
+    gender: string;
     avatar?: string;
     provider?: string;
+    age?: number;
+    bio?: string;
   }): Promise<LoginResult> {
     try {
       // Check if user already exists
-      const existingUser = await storage.getUserByEmail(userData.email);
+      const existingUser = await storage.getUserByPhoneNumber(userData.phoneNumber);
       if (existingUser) {
         throw new Error('User already exists');
       }
 
-      // Hash password
-      const hashedPassword = await bcrypt.hash(userData.password, 12);
+      // Create user (no password needed for phone auth)
+      const user = await storage.createUser(userData);
 
-      // Create user
-      const user = await storage.createUser({
-        ...userData,
-        password: hashedPassword
-      });
-
-      log(`User registered: ${user.email}`, 'auth');
+      log(`User registered: ${user.phoneNumber}`, 'auth');
       monitoring.incrementCounter('auth.registrations');
 
       // Generate tokens
@@ -89,20 +85,19 @@ class AuthService {
   }
 
   /**
-   * Login user with email and password
+   * Phone-based login (deprecated - use phone verification instead)
    */
   async login(credentials: {
-    email: string;
-    password: string;
+    phoneNumber: string;
     deviceInfo?: string;
     ipAddress?: string;
   }): Promise<LoginResult> {
     try {
-      // Authenticate user
-      const user = await storage.authenticateUser(credentials.email, credentials.password);
-      if (!user) {
+      // Get user by phone number
+      const user = await storage.getUserByPhoneNumber(credentials.phoneNumber);
+      if (!user || !user.isPhoneVerified) {
         monitoring.incrementCounter('auth.login_failures');
-        throw new Error('Invalid credentials');
+        throw new Error('User not found or phone not verified');
       }
 
       // Check for account blocks/bans
@@ -140,7 +135,7 @@ class AuthService {
       const decoded = jwt.verify(refreshToken, this.jwtRefreshSecret) as AuthTokenPayload;
       
       // Get user from database
-      const user = await storage.getUser(decoded.userId);
+      const user = await storage.getUser(parseInt(decoded.userId));
       if (!user) {
         throw new Error('User not found');
       }
@@ -205,13 +200,13 @@ class AuthService {
   /**
    * Generate access and refresh tokens
    */
-  private async generateTokens(user: any): Promise<LoginResult> {
+  async generateTokens(user: any): Promise<LoginResult> {
     const now = Math.floor(Date.now() / 1000);
     const expiresAt = now + this.tokenExpiry;
 
     const payload: Omit<AuthTokenPayload, 'iat' | 'exp'> = {
-      userId: user.id,
-      email: user.email,
+      userId: user.id.toString(),
+      phoneNumber: user.phoneNumber,
       name: user.name,
       avatar: user.avatar,
       permissions: ['user'] // Basic user permissions
@@ -230,7 +225,7 @@ class AuthService {
     return {
       user: {
         id: user.id,
-        email: user.email,
+        phoneNumber: user.phoneNumber,
         name: user.name,
         avatar: user.avatar
       },
@@ -343,10 +338,10 @@ class AuthService {
   }
 
   /**
-   * Generate password reset token
+   * Generate password reset token via phone
    */
-  async generatePasswordResetToken(email: string): Promise<string> {
-    const user = await storage.getUserByEmail(email);
+  async generatePasswordResetToken(phoneNumber: string): Promise<string> {
+    const user = await storage.getUserByPhoneNumber(phoneNumber);
     if (!user) {
       // Don't reveal if email exists for security
       throw new Error('If this email exists, a reset link has been sent');

@@ -8,6 +8,8 @@ import { monitoring } from "./monitoring";
 import { matchmakingService } from "./services/matchmaking";
 import { liveKitService } from "./services/livekit";
 import { authService } from "./services/auth";
+import { phoneAuthService } from "./services/phoneAuth";
+import { aiProfileService } from "./services/aiProfile";
 import { moderationService } from "./services/moderation";
 import { presenceService } from "./services/presence";
 
@@ -259,38 +261,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Authentication routes
-  app.post("/api/auth/register", async (req, res) => {
+  // Phone Authentication routes
+  app.post("/api/auth/send-otp", async (req, res) => {
     try {
-      const userData = insertUserSchema.parse(req.body);
+      const { phoneNumber } = req.body;
       
-      // Check if user already exists
-      const existingUser = await storage.getUserByEmail(userData.email);
-      if (existingUser) {
-        return res.status(400).json({ message: "Email already exists" });
+      if (!phoneNumber) {
+        return res.status(400).json({ error: "Phone number is required" });
       }
+
+      const result = await phoneAuthService.sendOTP(phoneNumber);
       
-      const user = await storage.createUser(userData);
-      res.json({ user: { id: user.id, email: user.email, name: user.name, avatar: user.avatar } });
+      if (result.success) {
+        res.json({ success: true, message: result.message, attemptId: result.attemptId });
+      } else {
+        res.status(400).json({ success: false, error: result.message });
+      }
     } catch (error) {
-      console.error('Registration error:', error);
-      res.status(400).json({ message: "Invalid user data" });
+      console.error('Send OTP error:', error);
+      res.status(500).json({ error: "Failed to send OTP" });
     }
   });
 
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/verify-otp", async (req, res) => {
     try {
-      const { email, password } = req.body;
-      const user = await storage.authenticateUser(email, password);
+      const { phoneNumber, otpCode } = req.body;
       
-      if (!user) {
-        return res.status(401).json({ message: "Invalid credentials" });
+      if (!phoneNumber || !otpCode) {
+        return res.status(400).json({ error: "Phone number and OTP code are required" });
+      }
+
+      const result = await phoneAuthService.verifyOTP(phoneNumber, otpCode);
+      
+      if (result.success) {
+        res.json({ success: true, user: result.user, message: result.message });
+      } else {
+        res.status(400).json({ success: false, error: result.message });
+      }
+    } catch (error) {
+      console.error('Verify OTP error:', error);
+      res.status(500).json({ error: "Failed to verify OTP" });
+    }
+  });
+
+  app.post("/api/auth/complete-registration", async (req, res) => {
+    try {
+      const userData = insertUserSchema.parse(req.body);
+      
+      // Check if phone is verified first
+      const isRegistered = await phoneAuthService.isPhoneNumberRegistered(userData.phoneNumber);
+      if (isRegistered) {
+        return res.status(400).json({ error: "Phone number already registered" });
       }
       
-      res.json({ user: { id: user.id, email: user.email, name: user.name, avatar: user.avatar } });
+      // Register user
+      const loginResult = await authService.register({
+        phoneNumber: userData.phoneNumber,
+        name: userData.name,
+        gender: userData.gender,
+        avatar: userData.avatar || undefined,
+        provider: userData.provider,
+        age: userData.age,
+        bio: userData.bio
+      });
+      
+      // Analyze user profile with AI if bio provided
+      if (userData.bio && userData.bio.length > 10) {
+        await aiProfileService.analyzeUserProfile(
+          parseInt(loginResult.user.id.toString()), 
+          userData.bio, 
+          userData.tags || [],
+          userData.age
+        );
+      }
+      
+      res.json(loginResult);
     } catch (error) {
-      console.error('Login error:', error);
-      res.status(500).json({ message: "Server error" });
+      console.error('Registration error:', error);
+      res.status(400).json({ error: "Invalid user data" });
+    }
+  });
+
+  app.post("/api/auth/phone-login", async (req, res) => {
+    try {
+      const { phoneNumber } = req.body;
+      
+      const user = await storage.getUserByPhoneNumber(phoneNumber);
+      if (!user || !user.isPhoneVerified) {
+        return res.status(401).json({ error: "User not found or phone not verified" });
+      }
+      
+      // Generate tokens for existing user
+      const tokens = await authService.generateTokens(user);
+      res.json(tokens);
+    } catch (error) {
+      console.error('Phone login error:', error);
+      res.status(500).json({ error: "Login failed" });
     }
   });
 

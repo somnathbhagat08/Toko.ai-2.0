@@ -31,7 +31,7 @@ interface MatchingProfile {
 }
 
 class AIProfileService {
-  private openai: OpenAI;
+  private openai!: OpenAI;
   private isEnabled: boolean = false;
 
   constructor() {

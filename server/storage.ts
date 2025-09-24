@@ -103,9 +103,13 @@ export class DatabaseStorage implements IStorage {
 
   async incrementVerificationAttempts(verificationId: number): Promise<void> {
     try {
+      // Get current attempts count first
+      const [current] = await db.select({ attempts: phoneVerifications.attempts }).from(phoneVerifications).where(eq(phoneVerifications.id, verificationId));
+      const newAttempts = (current?.attempts || 0) + 1;
+      
       await db
         .update(phoneVerifications)
-        .set({ attempts: db.select().from(phoneVerifications).where(eq(phoneVerifications.id, verificationId)).$dynamic()[0].attempts + 1 })
+        .set({ attempts: newAttempts })
         .where(eq(phoneVerifications.id, verificationId));
     } catch (error) {
       log(`Error incrementing verification attempts: ${error}`, 'storage');
@@ -268,7 +272,10 @@ export class MemStorage implements IStorage {
     const id = this.currentProfileId++;
     const created: UserProfile = {
       id,
-      ...profile,
+      userId: profile.userId,
+      conversationStyle: profile.conversationStyle || null,
+      topicPreferences: profile.topicPreferences || null,
+      personalityTraits: profile.personalityTraits || null,
       compatibilityScore: null,
       lastAnalyzed: new Date(),
       createdAt: new Date()
