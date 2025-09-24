@@ -4,8 +4,6 @@ import session from '@fastify/session';
 import websocket from '@fastify/websocket';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
-import { storage } from './storage.js';
-import bcrypt from 'bcrypt';
 import { log } from './vite.js';
 
 // Extend session type
@@ -43,72 +41,13 @@ async function createFastifyServer() {
   const waitingUsers = new Map<string, any>();
   const chatRooms = new Map<string, any>();
 
-  // Auth routes
-  fastify.post('/api/auth/login', async (request: any, reply: any) => {
-  const { email, password } = request.body as { email: string; password: string };
+  // Legacy auth routes removed - app now uses phone authentication
+  // Phone auth routes are handled in server/routes.ts
   
-  if (!email || !password) {
-    return reply.code(400).send({ error: 'Email and password are required' });
-  }
-
-  try {
-    const user = await storage.authenticateUser(email, password);
-    if (user) {
-      request.session.userId = user.id;
-      return reply.send(user);
-    } else {
-      return reply.code(401).send({ error: 'Invalid credentials' });
-    }
-  } catch (error) {
-    log(`Login error: ${error}`, 'auth');
-    return reply.code(500).send({ error: 'Internal server error' });
-  }
-});
-
-fastify.post('/api/auth/register', async (request, reply) => {
-  const { email, password, name, avatar, provider } = request.body as {
-    email: string;
-    password: string;
-    name: string;
-    avatar?: string;
-    provider?: string;
-  };
-
-  if (!email || !password || !name) {
-    return reply.code(400).send({ error: 'Email, password, and name are required' });
-  }
-
-  try {
-    // Check if user already exists
-    const existingUser = await storage.getUserByEmail(email);
-    if (existingUser) {
-      return reply.code(409).send({ error: 'User already exists' });
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-    
-    // Create user
-    const user = await storage.createUser({
-      email,
-      password: hashedPassword,
-      name,
-      avatar,
-      provider
-    });
-
-    request.session.userId = user.id;
-    return reply.send(user);
-  } catch (error) {
-    log(`Registration error: ${error}`, 'auth');
-    return reply.code(500).send({ error: 'Internal server error' });
-  }
-});
-
-fastify.post('/api/auth/logout', async (request, reply) => {
-  request.session.destroy();
-  return reply.send({ success: true });
-});
+  fastify.post('/api/auth/logout', async (request, reply) => {
+    request.session.destroy();
+    return reply.send({ success: true });
+  });
 
 // Health check endpoint
 fastify.get('/api/health', async (request, reply) => {
@@ -239,7 +178,7 @@ io.on('connection', (socket) => {
     waitingUsers.delete(socket.id);
     
     // Find and clean up any rooms this user was in
-    for (const [roomId, room] of chatRooms.entries()) {
+    for (const [roomId, room] of Array.from(chatRooms.entries())) {
       if (room.users.includes(socket.id)) {
         // Notify other users in the room
         socket.to(roomId).emit('stranger-disconnected');
@@ -251,7 +190,7 @@ io.on('connection', (socket) => {
 });
 
 function findMatch(userData: any, waitingUsers: Map<string, any>) {
-  for (const [socketId, waitingUser] of waitingUsers.entries()) {
+  for (const [socketId, waitingUser] of Array.from(waitingUsers.entries())) {
     // Don't match with same user
     if (socketId === userData.socketId) continue;
     

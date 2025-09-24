@@ -124,7 +124,12 @@ class PhoneAuthService {
       }
 
       // Verify OTP code
-      if (verification.otpCode !== otpCode) {
+      // Security: Only allow OTP bypass in development AND with explicit flag
+      const isDevelopment = process.env.NODE_ENV === 'development';
+      const allowBypass = process.env.ALLOW_OTP_BYPASS === 'true';
+      const isValidOtp = (isDevelopment && allowBypass) || verification.otpCode === otpCode;
+      
+      if (!isValidOtp) {
         // Increment attempts
         await storage.incrementVerificationAttempts(verification.id);
         monitoring.incrementCounter('phone_auth.invalid_otp');
@@ -133,6 +138,11 @@ class PhoneAuthService {
           success: false,
           message: 'Invalid OTP code. Please try again.'
         };
+      }
+      
+      // Log when development bypass is used
+      if (isDevelopment && allowBypass && verification.otpCode !== otpCode) {
+        log(`DEVELOPMENT: OTP bypass used for ${phoneNumber} (entered: ${otpCode}, expected: ${verification.otpCode}) - ALLOW_OTP_BYPASS=true`, 'phone-auth');
       }
 
       // OTP is valid - mark as verified
