@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageCircle, Mail, Lock, User, Eye, EyeOff, Star, Circle, Square, Triangle } from 'lucide-react';
+import { MessageCircle, Phone, Lock, User, Eye, EyeOff, Star, Circle, Square, Triangle, ArrowLeft } from 'lucide-react';
 import { authService } from '../services/authService';
 import TokoLogo from './TokoLogo';
 
@@ -22,22 +22,25 @@ interface LoginPageProps {
   onLogin: (user: any) => void;
 }
 
-// Helper function to generate a valid MongoDB ObjectId format
-const generateObjectId = () => {
-  const timestamp = Math.floor(Date.now() / 1000).toString(16);
-  const randomHex = Math.random().toString(16).substr(2, 16);
-  return (timestamp + randomHex).padEnd(24, '0').substr(0, 24);
-};
+type AuthStep = 'phone' | 'otp' | 'registration' | 'existing-user';
 
 export default function LoginPage({ onLogin }: LoginPageProps) {
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [authStep, setAuthStep] = useState<AuthStep>('phone');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [formData, setFormData] = useState({
+  const [successMessage, setSuccessMessage] = useState('');
+  
+  // Phone and OTP data
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  
+  // Registration data
+  const [registrationData, setRegistrationData] = useState({
     name: '',
-    email: '',
-    password: ''
+    gender: 'other',
+    age: '',
+    bio: '',
+    country: 'Any on Earth'
   });
 
   useEffect(() => {
@@ -54,29 +57,118 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     initGoogle();
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handlePhoneSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+    setSuccessMessage('');
+    
+    try {
+      // Basic phone number validation
+      const cleanPhone = phoneNumber.replace(/\D/g, '');
+      if (cleanPhone.length < 10) {
+        throw new Error('Please enter a valid phone number');
+      }
+
+      const result = await authService.sendOTP({ phoneNumber: cleanPhone });
+      
+      if (result.success) {
+        setSuccessMessage('OTP sent to your phone number. Please check your messages.');
+        setPhoneNumber(cleanPhone);
+        setAuthStep('otp');
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to send OTP');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleOtpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
     
     try {
-      if (isSignUp) {
-        const user = await authService.register({
-          email: formData.email,
-          password: formData.password,
-          name: formData.name,
-          provider: 'local'
-        });
-        onLogin(user);
+      if (otpCode.length !== 6) {
+        throw new Error('Please enter the complete 6-digit OTP code');
+      }
+
+      const result = await authService.verifyOTP({ 
+        phoneNumber, 
+        otpCode 
+      });
+      
+      if (result.success) {
+        if (result.user) {
+          // Existing user - login with phone
+          const loginResult = await authService.phoneLogin({ phoneNumber });
+          onLogin(loginResult.user);
+        } else {
+          // New user - go to registration
+          setSuccessMessage('Phone verified! Please complete your profile.');
+          setAuthStep('registration');
+        }
       } else {
-        const user = await authService.login({
-          email: formData.email,
-          password: formData.password
-        });
-        onLogin(user);
+        throw new Error(result.message);
       }
     } catch (err: any) {
-      setError(err.message || 'Authentication failed');
+      setError(err.message || 'OTP verification failed');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRegistrationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      if (!registrationData.name.trim()) {
+        throw new Error('Please enter your name');
+      }
+
+      const result = await authService.completeRegistration({
+        phoneNumber,
+        name: registrationData.name.trim(),
+        gender: registrationData.gender,
+        age: registrationData.age ? parseInt(registrationData.age) : undefined,
+        bio: registrationData.bio.trim() || undefined,
+        country: registrationData.country,
+        provider: 'phone'
+      });
+      
+      onLogin(result.user);
+    } catch (err: any) {
+      setError(err.message || 'Registration failed');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBackToPhone = () => {
+    setAuthStep('phone');
+    setOtpCode('');
+    setError('');
+    setSuccessMessage('');
+  };
+
+  const handleResendOtp = async () => {
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      const result = await authService.sendOTP({ phoneNumber });
+      if (result.success) {
+        setSuccessMessage('New OTP sent to your phone number.');
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to resend OTP');
     } finally {
       setIsLoading(false);
     }
@@ -85,8 +177,6 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   const initializeGoogleAuth = () => {
     if (window.google && window.google.accounts) {
       try {
-        // Note: This requires a valid Google OAuth client ID
-        // For production, replace with your actual client ID from Google Cloud Console
         const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '831096847886-qsejqd3kdcnc5tpev5gl0drlvhk74g20.apps.googleusercontent.com';
         
         window.google.accounts.id.initialize({
@@ -95,11 +185,11 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           auto_select: false,
           cancel_on_tap_outside: true,
           ux_mode: 'popup',
-          use_fedcm_for_prompt: true // Enable FedCM for future compatibility
+          use_fedcm_for_prompt: true
         });
       } catch (error) {
         console.error('Google Auth initialization error:', error);
-        setError('Google Sign-In requires valid client ID. Please use username/password login.');
+        setError('Google Sign-In requires valid client ID. Please use phone authentication.');
       }
     }
   };
@@ -108,12 +198,11 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     setIsLoading(true);
     setError('');
     
-    // Check if we have a valid Google client ID
     const hasValidClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID && 
                             import.meta.env.VITE_GOOGLE_CLIENT_ID !== '831096847886-qsejqd3kdcnc5tpev5gl0drlvhk74g20.apps.googleusercontent.com';
     
     if (!hasValidClientId) {
-      setError('Google Sign-In requires configuration. Please use username/password to continue.');
+      setError('Google Sign-In requires configuration. Please use phone authentication.');
       setIsLoading(false);
       return;
     }
@@ -122,7 +211,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       try {
         window.google.accounts.id.prompt();
       } catch (error) {
-        setError('Google Sign-In temporarily unavailable. Please use username/password.');
+        setError('Google Sign-In temporarily unavailable. Please use phone authentication.');
         setIsLoading(false);
       }
     } else {
@@ -131,62 +220,25 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     }
   };
 
-  const renderGoogleButton = () => {
-    const buttonDiv = document.createElement('div');
-    buttonDiv.id = 'google-signin-button';
-    document.body.appendChild(buttonDiv);
-    
-    if (window.google && window.google.accounts) {
-      window.google.accounts.id.renderButton(buttonDiv, {
-        theme: 'outline',
-        size: 'large',
-        width: 300
-      });
-      
-      // Auto-click the button
-      setTimeout(() => {
-        const googleButton = buttonDiv.querySelector('div[role="button"]') as HTMLElement;
-        if (googleButton) {
-          googleButton.click();
-        }
-        document.body.removeChild(buttonDiv);
-      }, 100);
-    }
-  };
-
   const handleGoogleCallback = async (response: any) => {
     try {
-      // Decode the JWT token (this should be done on the backend in production)
       const payload = JSON.parse(atob(response.credential.split('.')[1]));
       
-      // Try to find existing user first
       try {
-        const existingUser = await authService.login({
+        const newUser = await authService.register({
           email: payload.email,
-          password: payload.sub // Use Google ID as password identifier
+          password: payload.sub,
+          name: payload.name || payload.email,
+          avatar: payload.picture,
+          provider: 'google'
         });
         
         setIsLoading(false);
-        onLogin(existingUser);
-        return;
-      } catch (loginError) {
-        // User doesn't exist, create new account
-        try {
-          const newUser = await authService.register({
-            email: payload.email,
-            password: payload.sub, // Use Google ID as password
-            name: payload.name || payload.email,
-            avatar: payload.picture,
-            provider: 'google'
-          });
-          
-          setIsLoading(false);
-          onLogin(newUser);
-        } catch (registerError) {
-          console.error('Error creating Google user:', registerError);
-          setError('Failed to create account with Google');
-          setIsLoading(false);
-        }
+        onLogin(newUser);
+      } catch (registerError) {
+        console.error('Error creating Google user:', registerError);
+        setError('Failed to create account with Google');
+        setIsLoading(false);
       }
     } catch (error) {
       console.error('Error processing Google login:', error);
@@ -195,9 +247,232 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     }
   };
 
+  const renderPhoneStep = () => (
+    <form onSubmit={handlePhoneSubmit} className="space-y-3">
+      <div>
+        <label className="block text-xs font-black text-gray-900 mb-1">
+          PHONE NUMBER
+        </label>
+        <div className="relative">
+          <Phone className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-500" />
+          <input
+            type="tel"
+            value={phoneNumber}
+            onChange={(e) => setPhoneNumber(e.target.value)}
+            className="w-full pl-8 pr-2 py-2 border-3 border-black font-bold bg-gray-50 shadow-[2px_2px_0px_0px_#000] focus:outline-none focus:bg-white focus:shadow-[3px_3px_0px_0px_#00FF88] focus:border-green-400 transition-all text-xs"
+            placeholder="Enter your phone number"
+            required
+            disabled={isLoading}
+            data-testid="input-phone-number"
+          />
+        </div>
+      </div>
+
+      <button
+        type="submit"
+        disabled={isLoading}
+        className="w-full bg-black text-white border-3 border-black py-2 text-sm font-black transition-all shadow-[3px_3px_0px_0px_#666] hover:shadow-[4px_4px_0px_0px_#00FF88] hover:bg-green-400 hover:translate-x-[-1px] hover:translate-y-[-1px] active:shadow-[2px_2px_0px_0px_#8A2BE2] active:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-x-0 disabled:hover:translate-y-0 disabled:hover:bg-black disabled:hover:shadow-[3px_3px_0px_0px_#666] flex items-center justify-center gap-2"
+        data-testid="button-send-otp"
+      >
+        {isLoading ? (
+          <>
+            <div className="animate-spin w-3 h-3 border-2 border-white border-t-transparent rounded-full"></div>
+            SENDING OTP...
+          </>
+        ) : (
+          'SEND OTP'
+        )}
+      </button>
+    </form>
+  );
+
+  const renderOtpStep = () => (
+    <form onSubmit={handleOtpSubmit} className="space-y-3">
+      <div>
+        <label className="block text-xs font-black text-gray-900 mb-1">
+          VERIFICATION CODE
+        </label>
+        <div className="relative">
+          <Lock className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-500" />
+          <input
+            type="text"
+            value={otpCode}
+            onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            className="w-full pl-8 pr-2 py-2 border-3 border-black font-bold bg-gray-50 shadow-[2px_2px_0px_0px_#000] focus:outline-none focus:bg-white focus:shadow-[3px_3px_0px_0px_#00FF88] focus:border-green-400 transition-all text-xs text-center tracking-widest"
+            placeholder="Enter 6-digit OTP"
+            maxLength={6}
+            required
+            disabled={isLoading}
+            data-testid="input-otp-code"
+          />
+        </div>
+        <p className="text-xs text-gray-600 mt-1">
+          OTP sent to {phoneNumber}
+        </p>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={handleBackToPhone}
+          disabled={isLoading}
+          className="flex-1 bg-gray-100 text-black border-3 border-black py-2 text-sm font-black transition-all shadow-[2px_2px_0px_0px_#666] hover:shadow-[3px_3px_0px_0px_#666] hover:translate-x-[-1px] hover:translate-y-[-1px] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+          data-testid="button-back-to-phone"
+        >
+          <ArrowLeft className="w-3 h-3" />
+          BACK
+        </button>
+        <button
+          type="submit"
+          disabled={isLoading || otpCode.length !== 6}
+          className="flex-1 bg-black text-white border-3 border-black py-2 text-sm font-black transition-all shadow-[3px_3px_0px_0px_#666] hover:shadow-[4px_4px_0px_0px_#00FF88] hover:bg-green-400 hover:translate-x-[-1px] hover:translate-y-[-1px] active:shadow-[2px_2px_0px_0px_#8A2BE2] active:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-x-0 disabled:hover:translate-y-0 disabled:hover:bg-black disabled:hover:shadow-[3px_3px_0px_0px_#666] flex items-center justify-center gap-2"
+          data-testid="button-verify-otp"
+        >
+          {isLoading ? (
+            <>
+              <div className="animate-spin w-3 h-3 border-2 border-white border-t-transparent rounded-full"></div>
+              VERIFYING...
+            </>
+          ) : (
+            'VERIFY'
+          )}
+        </button>
+      </div>
+
+      <button
+        type="button"
+        onClick={handleResendOtp}
+        disabled={isLoading}
+        className="w-full bg-gray-100 text-black border-3 border-gray-400 py-1 text-xs font-black transition-all shadow-[2px_2px_0px_0px_#666] hover:shadow-[3px_3px_0px_0px_#666] hover:translate-x-[-1px] hover:translate-y-[-1px] disabled:opacity-50 disabled:cursor-not-allowed"
+        data-testid="button-resend-otp"
+      >
+        RESEND OTP
+      </button>
+    </form>
+  );
+
+  const renderRegistrationStep = () => (
+    <form onSubmit={handleRegistrationSubmit} className="space-y-3">
+      <div>
+        <label className="block text-xs font-black text-gray-900 mb-1">
+          FULL NAME *
+        </label>
+        <div className="relative">
+          <User className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-500" />
+          <input
+            type="text"
+            value={registrationData.name}
+            onChange={(e) => setRegistrationData(prev => ({ ...prev, name: e.target.value }))}
+            className="w-full pl-8 pr-2 py-2 border-3 border-black font-bold bg-gray-50 shadow-[2px_2px_0px_0px_#000] focus:outline-none focus:bg-white focus:shadow-[3px_3px_0px_0px_#00FF88] focus:border-green-400 transition-all text-xs"
+            placeholder="Enter your full name"
+            required
+            disabled={isLoading}
+            data-testid="input-full-name"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-black text-gray-900 mb-1">
+          GENDER *
+        </label>
+        <select
+          value={registrationData.gender}
+          onChange={(e) => setRegistrationData(prev => ({ ...prev, gender: e.target.value }))}
+          className="w-full px-2 py-2 border-3 border-black font-bold bg-gray-50 shadow-[2px_2px_0px_0px_#000] focus:outline-none focus:bg-white focus:shadow-[3px_3px_0px_0px_#00FF88] focus:border-green-400 transition-all text-xs"
+          required
+          disabled={isLoading}
+          data-testid="select-gender"
+        >
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-xs font-black text-gray-900 mb-1">
+          AGE (OPTIONAL)
+        </label>
+        <input
+          type="number"
+          value={registrationData.age}
+          onChange={(e) => setRegistrationData(prev => ({ ...prev, age: e.target.value }))}
+          className="w-full px-2 py-2 border-3 border-black font-bold bg-gray-50 shadow-[2px_2px_0px_0px_#000] focus:outline-none focus:bg-white focus:shadow-[3px_3px_0px_0px_#00FF88] focus:border-green-400 transition-all text-xs"
+          placeholder="Your age"
+          min="13"
+          max="100"
+          disabled={isLoading}
+          data-testid="input-age"
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-black text-gray-900 mb-1">
+          COUNTRY
+        </label>
+        <input
+          type="text"
+          value={registrationData.country}
+          onChange={(e) => setRegistrationData(prev => ({ ...prev, country: e.target.value }))}
+          className="w-full px-2 py-2 border-3 border-black font-bold bg-gray-50 shadow-[2px_2px_0px_0px_#000] focus:outline-none focus:bg-white focus:shadow-[3px_3px_0px_0px_#00FF88] focus:border-green-400 transition-all text-xs"
+          placeholder="Your country"
+          disabled={isLoading}
+          data-testid="input-country"
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-black text-gray-900 mb-1">
+          BIO (OPTIONAL)
+        </label>
+        <textarea
+          value={registrationData.bio}
+          onChange={(e) => setRegistrationData(prev => ({ ...prev, bio: e.target.value }))}
+          className="w-full px-2 py-2 border-3 border-black font-bold bg-gray-50 shadow-[2px_2px_0px_0px_#000] focus:outline-none focus:bg-white focus:shadow-[3px_3px_0px_0px_#00FF88] focus:border-green-400 transition-all text-xs"
+          placeholder="Tell us about yourself..."
+          rows={2}
+          disabled={isLoading}
+          data-testid="textarea-bio"
+        />
+      </div>
+
+      <button
+        type="submit"
+        disabled={isLoading}
+        className="w-full bg-black text-white border-3 border-black py-2 text-sm font-black transition-all shadow-[3px_3px_0px_0px_#666] hover:shadow-[4px_4px_0px_0px_#00FF88] hover:bg-green-400 hover:translate-x-[-1px] hover:translate-y-[-1px] active:shadow-[2px_2px_0px_0px_#8A2BE2] active:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-x-0 disabled:hover:translate-y-0 disabled:hover:bg-black disabled:hover:shadow-[3px_3px_0px_0px_#666] flex items-center justify-center gap-2"
+        data-testid="button-complete-registration"
+      >
+        {isLoading ? (
+          <>
+            <div className="animate-spin w-3 h-3 border-2 border-white border-t-transparent rounded-full"></div>
+            CREATING ACCOUNT...
+          </>
+        ) : (
+          'CREATE ACCOUNT'
+        )}
+      </button>
+    </form>
+  );
+
+  const getHeaderText = () => {
+    switch (authStep) {
+      case 'phone':
+        return { title: 'WELCOME TO TOKO', subtitle: 'Enter your phone number to get started' };
+      case 'otp':
+        return { title: 'VERIFY YOUR PHONE', subtitle: 'Enter the code we sent to your phone' };
+      case 'registration':
+        return { title: 'COMPLETE YOUR PROFILE', subtitle: 'Tell us a bit about yourself' };
+      default:
+        return { title: 'WELCOME BACK', subtitle: 'Sign in to continue' };
+    }
+  };
+
+  const headerText = getHeaderText();
+
   return (
     <div className="h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 relative overflow-hidden">
-      {/* Animated Background Elements */}
+      {/* Background elements - same as before */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {/* Animated Hello Text Lines */}
         <div className="absolute top-[15%] left-0 w-full opacity-10">
@@ -245,9 +520,9 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         }}
       />
 
-      {/* Evenly Distributed Geometric Shapes Background */}
+      {/* Geometric Shapes Background */}
       <div className="absolute inset-0 overflow-hidden">
-        {/* Evenly Distributed Stars */}
+        {/* Stars */}
         {[...Array(15)].map((_, i) => (
           <div
             key={`star-${i}`}
@@ -264,7 +539,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           </div>
         ))}
         
-        {/* Evenly Distributed Circles */}
+        {/* Circles */}
         {[...Array(12)].map((_, i) => (
           <div
             key={`circle-${i}`}
@@ -281,7 +556,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           </div>
         ))}
 
-        {/* Evenly Distributed Squares */}
+        {/* Squares */}
         {[...Array(10)].map((_, i) => (
           <div
             key={`square-${i}`}
@@ -299,7 +574,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           </div>
         ))}
 
-        {/* Evenly Distributed Triangles */}
+        {/* Triangles */}
         {[...Array(8)].map((_, i) => (
           <div
             key={`triangle-${i}`}
@@ -343,168 +618,87 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               <h1 className="text-3xl font-black text-black tracking-tight">TOKO</h1>
             </div>
             <h2 className="text-lg font-black text-gray-900 mb-1">
-              {isSignUp ? 'CREATE ACCOUNT' : 'WELCOME BACK'}
+              {headerText.title}
             </h2>
             <p className="text-sm font-bold text-gray-700">
-              {isSignUp ? 'Join the conversation revolution' : 'Connect with strangers worldwide'}
+              {headerText.subtitle}
             </p>
           </div>
 
-          {/* Login Form */}
+          {/* Main Form */}
           <div className="bg-white border-4 border-black p-4 shadow-[8px_8px_0px_0px_#000] mb-3">
-            <form onSubmit={handleSubmit} className="space-y-3">
-              {isSignUp && (
-                <div>
-                  <label className="block text-xs font-black text-gray-900 mb-1">
-                    FULL NAME
-                  </label>
-                  <div className="relative">
-                    <User className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-500" />
-                    <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                      className="w-full pl-8 pr-2 py-2 border-3 border-black font-bold bg-gray-50 shadow-[2px_2px_0px_0px_#000] focus:outline-none focus:bg-white focus:shadow-[3px_3px_0px_0px_#00FF88] focus:border-green-400 transition-all text-xs"
-                      placeholder="Enter your name"
-                      required={isSignUp}
-                      disabled={isLoading}
-                    />
-                  </div>
-                </div>
-              )}
+            {successMessage && (
+              <div className="text-green-600 text-xs font-bold bg-green-50 border-2 border-green-200 p-2 rounded mb-3" data-testid="success-message">
+                {successMessage}
+              </div>
+            )}
 
-              <div>
-                <label className="block text-xs font-black text-gray-900 mb-1">
-                  EMAIL
-                </label>
+            {error && (
+              <div className="text-red-600 text-xs font-bold bg-red-50 border-2 border-red-200 p-2 rounded mb-3" data-testid="error-message">
+                {error}
+              </div>
+            )}
+
+            {authStep === 'phone' && renderPhoneStep()}
+            {authStep === 'otp' && renderOtpStep()}
+            {authStep === 'registration' && renderRegistrationStep()}
+
+            {/* Google OAuth - only show on phone step */}
+            {authStep === 'phone' && (
+              <div className="mt-3">
                 <div className="relative">
-                  <Mail className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-500" />
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                    className="w-full pl-8 pr-2 py-2 border-3 border-black font-bold bg-gray-50 shadow-[2px_2px_0px_0px_#000] focus:outline-none focus:bg-white focus:shadow-[3px_3px_0px_0px_#00FF88] focus:border-green-400 transition-all text-xs"
-                    placeholder="Enter your email"
-                    required
-                    disabled={isLoading}
-                  />
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t-2 border-black"></div>
+                  </div>
+                  <div className="relative flex justify-center text-xs">
+                    <span className="px-2 bg-white font-black text-gray-900">OR</span>
+                  </div>
                 </div>
+
+                <button
+                  onClick={handleGoogleLogin}
+                  disabled={isLoading}
+                  className="w-full mt-2 bg-white text-black border-3 border-black py-2 text-sm font-black transition-all shadow-[3px_3px_0px_0px_#666] hover:shadow-[6px_6px_0px_0px_#4285F4] hover:translate-x-[-3px] hover:translate-y-[-3px] hover:bg-blue-50 hover:border-blue-500 active:shadow-[2px_2px_0px_0px_#8A2BE2] active:bg-purple-500 active:translate-x-[1px] active:translate-y-[1px] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden"
+                  data-testid="button-google-login"
+                >
+                  {/* Animated geometric shapes for hover effect */}
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <div className="absolute -top-1 -left-1 opacity-60 animate-bounce">
+                      <Star className="w-3 h-3 text-blue-500 fill-current" />
+                    </div>
+                    <div className="absolute -top-1 -right-1 opacity-60 animate-pulse">
+                      <Circle className="w-2 h-2 text-green-500 fill-current" />
+                    </div>
+                    <div className="absolute -bottom-1 -left-1 opacity-60 animate-spin">
+                      <Square className="w-2 h-2 text-red-500 fill-current" />
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 opacity-60 animate-ping">
+                      <Triangle className="w-3 h-3 text-yellow-500 fill-current" />
+                    </div>
+                  </div>
+                  
+                  {isLoading ? (
+                    <>
+                      <div className="animate-spin w-3 h-3 border-2 border-black border-t-transparent rounded-full relative z-10"></div>
+                      <span className="relative z-10">CONNECTING...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 relative z-10" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                      </svg>
+                      <span className="relative z-10">CONTINUE WITH GOOGLE</span>
+                    </>
+                  )}
+                </button>
               </div>
-
-              {error && (
-                <div className="text-red-600 text-xs font-bold bg-red-50 border-2 border-red-200 p-2 rounded">
-                  {error}
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-black text-gray-900 mb-1">
-                  PASSWORD
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-500" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={formData.password}
-                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                    className="w-full pl-8 pr-8 py-2 border-3 border-black font-bold bg-gray-50 shadow-[2px_2px_0px_0px_#000] focus:outline-none focus:bg-white focus:shadow-[3px_3px_0px_0px_#00FF88] focus:border-green-400 transition-all text-xs"
-                    placeholder="Enter your password"
-                    required
-                    disabled={isLoading}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                    disabled={isLoading}
-                  >
-                    {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-black text-white border-3 border-black py-2 text-sm font-black transition-all shadow-[3px_3px_0px_0px_#666] hover:shadow-[4px_4px_0px_0px_#00FF88] hover:bg-green-400 hover:translate-x-[-1px] hover:translate-y-[-1px] active:shadow-[2px_2px_0px_0px_#8A2BE2] active:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-x-0 disabled:hover:translate-y-0 disabled:hover:bg-black disabled:hover:shadow-[3px_3px_0px_0px_#666] flex items-center justify-center gap-2"
-              >
-                {isLoading ? (
-                  <>
-                    <div className="animate-spin w-3 h-3 border-2 border-white border-t-transparent rounded-full"></div>
-                    PROCESSING...
-                  </>
-                ) : (
-                  isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN'
-                )}
-              </button>
-            </form>
-
-            <div className="mt-3">
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t-2 border-black"></div>
-                </div>
-                <div className="relative flex justify-center text-xs">
-                  <span className="px-2 bg-white font-black text-gray-900">OR</span>
-                </div>
-              </div>
-
-              <button
-                onClick={handleGoogleLogin}
-                disabled={isLoading}
-                className="w-full mt-2 bg-white text-black border-3 border-black py-2 text-sm font-black transition-all shadow-[3px_3px_0px_0px_#666] hover:shadow-[6px_6px_0px_0px_#4285F4] hover:translate-x-[-3px] hover:translate-y-[-3px] hover:bg-blue-50 hover:border-blue-500 active:shadow-[2px_2px_0px_0px_#8A2BE2] active:bg-purple-500 active:translate-x-[1px] active:translate-y-[1px] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden"
-              >
-                {/* Animated geometric shapes for hover effect */}
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  <div className="absolute -top-1 -left-1 opacity-60 animate-bounce">
-                    <Star className="w-3 h-3 text-blue-500 fill-current" />
-                  </div>
-                  <div className="absolute -top-1 -right-1 opacity-60 animate-pulse">
-                    <Circle className="w-2 h-2 text-green-500 fill-current" />
-                  </div>
-                  <div className="absolute -bottom-1 -left-1 opacity-60 animate-spin">
-                    <Square className="w-2 h-2 text-red-500 fill-current" />
-                  </div>
-                  <div className="absolute -bottom-1 -right-1 opacity-60 animate-ping">
-                    <Triangle className="w-3 h-3 text-yellow-500 fill-current" />
-                  </div>
-                </div>
-                
-                {isLoading ? (
-                  <>
-                    <div className="animate-spin w-3 h-3 border-2 border-black border-t-transparent rounded-full relative z-10"></div>
-                    <span className="relative z-10">CONNECTING...</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4 relative z-10" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                    </svg>
-                    <span className="relative z-10">CONTINUE WITH GOOGLE</span>
-                  </>
-                )}
-              </button>
-            </div>
+            )}
           </div>
 
-          {/* Toggle Sign Up/Sign In */}
-          <div className="text-center">
-            <p className="font-bold text-gray-700 text-xs">
-              {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
-              <button
-                onClick={() => setIsSignUp(!isSignUp)}
-                disabled={isLoading}
-                className="text-black font-black underline hover:no-underline hover:text-green-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSignUp ? 'SIGN IN' : 'SIGN UP'}
-              </button>
-            </p>
-          </div>
-
-          {/* Made by Humans using AI Footer - Fixed positioning */}
+          {/* Footer */}
           <div className="text-center mt-12">
             <p className="text-sm font-black text-gray-700">
               Made by Humans using AI 🤖

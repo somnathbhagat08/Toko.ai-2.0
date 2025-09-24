@@ -23,11 +23,16 @@ export interface VideoCall {
 
 export interface User {
   id: string;
-  email: string;
+  phoneNumber: string;
   name: string;
   avatar?: string;
-  tags?: string[];
+  provider?: string;
   country?: string;
+  tags?: string[];
+  gender?: string;
+  age?: number;
+  bio?: string;
   isOnline?: boolean;
+  isPhoneVerified?: boolean;
   lastSeen?: Date;
 }
