@@ -6,12 +6,12 @@ import InteractiveGlobe from './InteractiveGlobe';
 import { io, Socket } from 'socket.io-client';
 
 interface HomePageProps {
-  onStartChat: (interests: string[], mode: 'text' | 'video', genderPreference?: string, countryPreference?: string) => void;
+  onStartChat: (vibes: string[], mode: 'text' | 'video', genderPreference?: string, countryPreference?: string) => void;
   user: any;
   onLogout: () => void;
 }
 
-const SUGGESTED_INTERESTS = [
+const SUGGESTED_VIBES = [
   'Technology', 'Art & Design', 'Music', 'Gaming', 'Business', 'Travel',
   'Photography', 'Fitness', 'Literature', 'Science', 'Philosophy', 'Fashion',
   'Cooking', 'Sports', 'Movies', 'Entrepreneurship', 'Podcasts', 'Dancing'
@@ -145,20 +145,20 @@ interface PlatformStats {
   averageWaitTime: number;
   serverUptime: number;
   chatModes: Record<string, number>;
-  popularInterests: Array<{ interest: string; count: number }>;
+  popularVibes: Array<{ vibe: string; count: number }>;
   timestamp: number;
 }
 
 export default function HomePage({ onStartChat, user, onLogout }: HomePageProps) {
-  const [interests, setInterests] = useState<string[]>([]);
-  const [customInterest, setCustomInterest] = useState('');
+  const [vibes, setVibes] = useState<string[]>([]);
+  const [customVibe, setCustomVibe] = useState('');
   const [genderPreference, setGenderPreference] = useState<string>('any');
   const [countryPreference, setCountryPreference] = useState<string>('Any on Earth');
   const [showRealName, setShowRealName] = useState(false);
   const [showCountryPopup, setShowCountryPopup] = useState(false);
-  const [showInterestPopup, setShowInterestPopup] = useState(false);
+  const [showVibePopup, setShowVibePopup] = useState(false);
   const [countrySearch, setCountrySearch] = useState('');
-  const [interestSearch, setInterestSearch] = useState('');
+  const [vibeSearch, setVibeSearch] = useState('');
 
   const [socket, setSocket] = useState<Socket | null>(null);
   const [platformStats, setPlatformStats] = useState<PlatformStats>({
@@ -170,7 +170,7 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
     averageWaitTime: 0,
     serverUptime: 0,
     chatModes: {},
-    popularInterests: [],
+    popularVibes: [],
     timestamp: Date.now()
   });
 
@@ -217,18 +217,18 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
     return username.substring(0, 2) + '*'.repeat(maskLength) + username.substring(username.length - 2);
   };
 
-  const toggleInterest = (interest: string) => {
-    setInterests(prev => 
-      prev.includes(interest) 
-        ? prev.filter(i => i !== interest)
-        : [...prev, interest]
+  const toggleVibe = (vibe: string) => {
+    setVibes(prev => 
+      prev.includes(vibe) 
+        ? prev.filter(i => i !== vibe)
+        : [...prev, vibe]
     );
   };
 
-  const addCustomInterest = () => {
-    if (customInterest.trim() && !interests.includes(customInterest.trim())) {
-      setInterests(prev => [...prev, customInterest.trim()]);
-      setCustomInterest('');
+  const addCustomVibe = () => {
+    if (customVibe.trim() && !vibes.includes(customVibe.trim())) {
+      setVibes(prev => [...prev, customVibe.trim()]);
+      setCustomVibe('');
     }
   };
 
@@ -237,14 +237,14 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
     country.name.toLowerCase().includes(countrySearch.toLowerCase())
   );
 
-  const filteredInterests = SUGGESTED_INTERESTS.filter(interest =>
-    interest.toLowerCase().includes(interestSearch.toLowerCase())
+  const filteredVibes = SUGGESTED_VIBES.filter(vibe =>
+    vibe.toLowerCase().includes(vibeSearch.toLowerCase())
   );
 
 
 
   const handleStartChat = (mode: 'text' | 'video') => {
-    onStartChat(interests, mode, genderPreference, countryPreference);
+    onStartChat(vibes, mode, genderPreference, countryPreference);
   };
 
   return (
@@ -558,21 +558,21 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
           <div className="bg-white border-4 border-black p-4 shadow-[8px_8px_0px_0px_#000] h-full flex flex-col">
             <h3 className="text-lg font-black mb-3 flex items-center gap-2 text-black">
               <Users className="w-5 h-5" />
-              INTERESTS
+              VIBES
             </h3>
 
-            {/* Add custom interest */}
+            {/* Add custom vibe */}
             <div className="mb-3">
               <input
                 type="text"
-                placeholder="Add custom interest..."
-                value={customInterest}
-                onChange={(e) => setCustomInterest(e.target.value)}
+                placeholder="Add custom vibe..."
+                value={customVibe}
+                onChange={(e) => setCustomVibe(e.target.value)}
                 className="w-full px-3 py-2 border-2 border-black font-bold bg-gray-50 focus:outline-none focus:bg-white focus:border-purple-400 text-sm mb-2"
-                onKeyPress={(e) => e.key === 'Enter' && addCustomInterest()}
+                onKeyPress={(e) => { if (e.key === 'Enter') addCustomVibe(); }}
               />
               <button
-                onClick={addCustomInterest}
+                onClick={addCustomVibe}
                 className="w-full px-6 py-2 border-2 border-black font-black bg-purple-400 text-black hover:bg-purple-300 shadow-[2px_2px_0px_0px_#000] text-sm"
               >
                 ADD
@@ -582,27 +582,27 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
             {/* Select button */}
             <div className="mb-3">
               <button
-                onClick={() => setShowInterestPopup(true)}
+                onClick={() => setShowVibePopup(true)}
                 className="w-full px-3 py-3 border-3 border-black font-black bg-gradient-to-r from-purple-400 to-pink-500 text-black focus:outline-none hover:from-yellow-400 hover:to-green-500 text-sm shadow-[3px_3px_0px_0px_#000] hover:shadow-[4px_4px_0px_0px_#00FF88] hover:translate-x-[-1px] hover:translate-y-[-1px] cursor-pointer"
               >
-                SELECT INTERESTS
+                SELECT VIBES
               </button>
             </div>
 
-            {/* Selected interests display */}
+            {/* Selected vibes display */}
             <div className="mb-3">
               <div className="text-sm font-bold mb-2">
-                Selected ({interests.length}):
+                Selected ({vibes.length}):
               </div>
               <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto">
-                {interests.map(interest => (
+                {vibes.map(vibe => (
                   <span
-                    key={interest}
+                    key={vibe}
                     className="bg-black text-white px-2 py-1 text-xs font-bold rounded flex items-center gap-1 cursor-pointer hover:bg-red-600"
-                    onClick={() => setInterests(interests.filter(i => i !== interest))}
+                    onClick={() => setVibes(vibes.filter(i => i !== vibe))}
                     title="Click to remove"
                   >
-                    {interest}
+                    {vibe}
                     <span className="text-red-300">×</span>
                   </span>
                 ))}
@@ -612,8 +612,8 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
             {/* Info section */}
             <div className="mt-auto p-3 bg-gray-50 border-2 border-black">
               <p className="text-xs font-bold text-gray-700 text-center">
-                <span className="text-purple-600">💡</span> Add interests to find like-minded people<br/>
-                Click selected interests to remove them
+                <span className="text-purple-600">💡</span> Add vibes to find like-minded people<br/>
+                Click selected vibes to remove them
               </p>
             </div>
           </div>
@@ -685,14 +685,14 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
         />
       )}
 
-      {/* Interest Selection Popup - Mobile responsive */}
-      {showInterestPopup && (
+      {/* Vibe Selection Popup - Mobile responsive */}
+      {showVibePopup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
           <div className="bg-white border-4 border-black p-4 sm:p-6 shadow-[8px_8px_0px_0px_#000] max-w-md w-full max-h-[90vh] sm:max-h-[80vh] overflow-hidden flex flex-col">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg sm:text-xl font-black text-black">SELECT INTERESTS</h3>
+              <h3 className="text-lg sm:text-xl font-black text-black">SELECT VIBES</h3>
               <button
-                onClick={() => setShowInterestPopup(false)}
+                onClick={() => setShowVibePopup(false))
                 className="bg-red-500 text-white border-2 border-black px-3 py-1 font-black hover:bg-red-400 shadow-[2px_2px_0px_0px_#000]"
               >
                 ✕
@@ -703,31 +703,31 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
             <div className="mb-4">
               <div className="bg-gradient-to-r from-purple-400 to-pink-500 border-2 border-black p-2 shadow-[2px_2px_0px_0px_#000]">
                 <p className="font-black text-black text-sm text-center">
-                  🔥 TRENDING INTERESTS
+                  🔥 TRENDING VIBES
                 </p>
               </div>
             </div>
 
-            {/* Interests grid - scrollable, mobile responsive */}
+            {/* Vibes grid - scrollable, mobile responsive */}
             <div className="flex-1 overflow-y-auto">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {SUGGESTED_INTERESTS.map(interest => (
+                {SUGGESTED_VIBES.map(vibe => (
                   <button
-                    key={interest}
+                    key={vibe}
                     onClick={() => {
-                      if (!interests.includes(interest)) {
-                        setInterests([...interests, interest]);
+                      if (!vibes.includes(vibe)) {
+                        setVibes([...vibes, vibe]);
                       }
                     }}
-                    disabled={interests.includes(interest)}
+                    disabled={vibes.includes(vibe)}
                     className={`p-3 border-3 border-black font-black transition-all shadow-[3px_3px_0px_0px_#000] hover:shadow-[4px_4px_0px_0px_#00FF88] hover:translate-x-[-1px] hover:translate-y-[-1px] text-xs ${
-                      interests.includes(interest)
+                      vibes.includes(vibe)
                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed border-gray-600'
                         : 'bg-black text-white hover:bg-gray-800'
                     }`}
                   >
-                    {interest}
-                    {interests.includes(interest) && (
+                    {vibe}
+                    {vibes.includes(vibe) && (
                       <span className="block text-gray-400 mt-1 font-black">✓ Added</span>
                     )}
                   </button>
@@ -738,7 +738,7 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
             {/* Selected count */}
             <div className="mt-4 p-2 bg-gray-50 border-2 border-black">
               <p className="text-sm font-bold text-center">
-                {interests.length} interests selected
+                {vibes.length} vibes selected
               </p>
             </div>
           </div>
