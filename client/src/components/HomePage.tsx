@@ -692,7 +692,7 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg sm:text-xl font-black text-black">SELECT VIBES</h3>
               <button
-                onClick={() => setShowVibePopup(false))
+                onClick={() => setShowVibePopup(false)}
                 className="bg-red-500 text-white border-2 border-black px-3 py-1 font-black hover:bg-red-400 shadow-[2px_2px_0px_0px_#000]"
               >
                 ✕
