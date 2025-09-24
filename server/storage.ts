@@ -1,16 +1,26 @@
-import { type User, type InsertUser } from "@shared/schema";
-import bcrypt from "bcrypt";
+import { type User, type InsertUser, type PhoneVerification, type InsertPhoneVerification, type UserProfile, type InsertUserProfile } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
-import { users } from "@shared/schema";
+import { eq, desc } from "drizzle-orm";
+import { users, phoneVerifications, userProfiles } from "@shared/schema";
 import { log } from "./vite";
 
 // Storage interface for CRUD operations
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
-  getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByPhoneNumber(phoneNumber: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  authenticateUser(email: string, password: string): Promise<User | null>;
+  markPhoneAsVerified(userId: number): Promise<void>;
+  
+  // Phone verification methods
+  createPhoneVerification(verification: InsertPhoneVerification): Promise<PhoneVerification>;
+  getLatestPhoneVerification(phoneNumber: string): Promise<PhoneVerification | undefined>;
+  incrementVerificationAttempts(verificationId: number): Promise<void>;
+  markVerificationAsUsed(verificationId: number): Promise<void>;
+  
+  // User profile methods
+  createUserProfile(profile: InsertUserProfile): Promise<UserProfile>;
+  getUserProfile(userId: number): Promise<UserProfile | undefined>;
+  updateUserProfile(userId: number, updates: Partial<UserProfile>): Promise<void>;
 }
 
 // PostgreSQL Storage Implementation
@@ -25,26 +35,21 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getUserByEmail(email: string): Promise<User | undefined> {
+  async getUserByPhoneNumber(phoneNumber: string): Promise<User | undefined> {
     try {
-      const [user] = await db.select().from(users).where(eq(users.email, email));
+      const [user] = await db.select().from(users).where(eq(users.phoneNumber, phoneNumber));
       return user || undefined;
     } catch (error) {
-      log(`Error fetching user by email: ${error instanceof Error ? error.message : String(error)}`, 'storage');
+      log(`Error fetching user by phone: ${error instanceof Error ? error.message : String(error)}`, 'storage');
       return undefined;
     }
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
     try {
-      const hashedPassword = await bcrypt.hash(insertUser.password, 10);
-      
       const [user] = await db
         .insert(users)
-        .values({
-          ...insertUser,
-          password: hashedPassword,
-        })
+        .values(insertUser)
         .returning();
       
       return user;
@@ -54,24 +59,110 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async authenticateUser(email: string, password: string): Promise<User | null> {
+  async markPhoneAsVerified(userId: number): Promise<void> {
     try {
-      const user = await this.getUserByEmail(email);
-      if (!user) return null;
-
-      // For Google users, password is not used for authentication
-      if (user.provider === 'google') {
-        return null;
-      }
-
-      // Compare password for local users
-      const passwordMatch = await bcrypt.compare(password, user.password);
-      if (!passwordMatch) return null;
-
-      return user;
+      await db.update(users)
+        .set({ isPhoneVerified: true })
+        .where(eq(users.id, userId));
     } catch (error) {
-      log(`Error authenticating user: ${error}`, 'storage');
-      return null;
+      log(`Error marking phone as verified: ${error}`, 'storage');
+      throw error;
+    }
+  }
+
+  // Phone verification methods
+  async createPhoneVerification(verification: InsertPhoneVerification): Promise<PhoneVerification> {
+    try {
+      const [created] = await db
+        .insert(phoneVerifications)
+        .values(verification)
+        .returning();
+      
+      return created;
+    } catch (error) {
+      log(`Error creating phone verification: ${error}`, 'storage');
+      throw error;
+    }
+  }
+
+  async getLatestPhoneVerification(phoneNumber: string): Promise<PhoneVerification | undefined> {
+    try {
+      const [verification] = await db
+        .select()
+        .from(phoneVerifications)
+        .where(eq(phoneVerifications.phoneNumber, phoneNumber))
+        .orderBy(desc(phoneVerifications.createdAt))
+        .limit(1);
+      
+      return verification || undefined;
+    } catch (error) {
+      log(`Error getting phone verification: ${error}`, 'storage');
+      return undefined;
+    }
+  }
+
+  async incrementVerificationAttempts(verificationId: number): Promise<void> {
+    try {
+      await db
+        .update(phoneVerifications)
+        .set({ attempts: db.select().from(phoneVerifications).where(eq(phoneVerifications.id, verificationId)).$dynamic()[0].attempts + 1 })
+        .where(eq(phoneVerifications.id, verificationId));
+    } catch (error) {
+      log(`Error incrementing verification attempts: ${error}`, 'storage');
+      throw error;
+    }
+  }
+
+  async markVerificationAsUsed(verificationId: number): Promise<void> {
+    try {
+      await db
+        .update(phoneVerifications)
+        .set({ isVerified: true })
+        .where(eq(phoneVerifications.id, verificationId));
+    } catch (error) {
+      log(`Error marking verification as used: ${error}`, 'storage');
+      throw error;
+    }
+  }
+
+  // User profile methods
+  async createUserProfile(profile: InsertUserProfile): Promise<UserProfile> {
+    try {
+      const [created] = await db
+        .insert(userProfiles)
+        .values(profile)
+        .returning();
+      
+      return created;
+    } catch (error) {
+      log(`Error creating user profile: ${error}`, 'storage');
+      throw error;
+    }
+  }
+
+  async getUserProfile(userId: number): Promise<UserProfile | undefined> {
+    try {
+      const [profile] = await db
+        .select()
+        .from(userProfiles)
+        .where(eq(userProfiles.userId, userId));
+      
+      return profile || undefined;
+    } catch (error) {
+      log(`Error getting user profile: ${error}`, 'storage');
+      return undefined;
+    }
+  }
+
+  async updateUserProfile(userId: number, updates: Partial<UserProfile>): Promise<void> {
+    try {
+      await db
+        .update(userProfiles)
+        .set(updates)
+        .where(eq(userProfiles.userId, userId));
+    } catch (error) {
+      log(`Error updating user profile: ${error}`, 'storage');
+      throw error;
     }
   }
 }
@@ -79,35 +170,48 @@ export class DatabaseStorage implements IStorage {
 // Memory Storage Implementation (fallback)
 export class MemStorage implements IStorage {
   private users: Map<number, User>;
-  private currentId: number;
+  private verifications: Map<number, PhoneVerification>;
+  private profiles: Map<number, UserProfile>;
+  private currentUserId: number;
+  private currentVerificationId: number;
+  private currentProfileId: number;
 
   constructor() {
     this.users = new Map();
-    this.currentId = 1;
+    this.verifications = new Map();
+    this.profiles = new Map();
+    this.currentUserId = 1;
+    this.currentVerificationId = 1;
+    this.currentProfileId = 1;
   }
 
   async getUser(id: number): Promise<User | undefined> {
     return this.users.get(id);
   }
 
-  async getUserByEmail(email: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(user => user.email === email);
+  async getUserByPhoneNumber(phoneNumber: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(user => user.phoneNumber === phoneNumber);
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentId++;
-    const hashedPassword = await bcrypt.hash(insertUser.password, 10);
+    const id = this.currentUserId++;
     
     const user: User = { 
       id: id,
-      email: insertUser.email,
-      password: hashedPassword,
+      phoneNumber: insertUser.phoneNumber,
       name: insertUser.name,
       avatar: insertUser.avatar || null,
-      provider: insertUser.provider || 'local',
+      provider: insertUser.provider || 'phone',
       country: insertUser.country || 'Any on Earth',
       tags: insertUser.tags || [],
+      gender: insertUser.gender,
+      age: insertUser.age || null,
+      bio: insertUser.bio || null,
+      personalityVector: null,
+      interestVector: null,
+      communicationStyle: null,
       isOnline: false,
+      isPhoneVerified: false,
       lastSeen: new Date(),
       createdAt: new Date()
     };
@@ -116,20 +220,73 @@ export class MemStorage implements IStorage {
     return user;
   }
 
-  async authenticateUser(email: string, password: string): Promise<User | null> {
-    const user = await this.getUserByEmail(email);
-    if (!user) return null;
-
-    // For Google users, password is not used for authentication
-    if (user.provider === 'google') {
-      return null;
+  async markPhoneAsVerified(userId: number): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) {
+      user.isPhoneVerified = true;
+      this.users.set(userId, user);
     }
+  }
 
-    // Compare password for local users
-    const passwordMatch = await bcrypt.compare(password, user.password);
-    if (!passwordMatch) return null;
+  async createPhoneVerification(verification: InsertPhoneVerification): Promise<PhoneVerification> {
+    const id = this.currentVerificationId++;
+    const created: PhoneVerification = {
+      id,
+      ...verification,
+      isVerified: false,
+      attempts: 0,
+      createdAt: new Date()
+    };
+    this.verifications.set(id, created);
+    return created;
+  }
 
-    return user;
+  async getLatestPhoneVerification(phoneNumber: string): Promise<PhoneVerification | undefined> {
+    const verifications = Array.from(this.verifications.values())
+      .filter(v => v.phoneNumber === phoneNumber)
+      .sort((a, b) => b.createdAt!.getTime() - a.createdAt!.getTime());
+    return verifications[0];
+  }
+
+  async incrementVerificationAttempts(verificationId: number): Promise<void> {
+    const verification = this.verifications.get(verificationId);
+    if (verification) {
+      verification.attempts = (verification.attempts || 0) + 1;
+      this.verifications.set(verificationId, verification);
+    }
+  }
+
+  async markVerificationAsUsed(verificationId: number): Promise<void> {
+    const verification = this.verifications.get(verificationId);
+    if (verification) {
+      verification.isVerified = true;
+      this.verifications.set(verificationId, verification);
+    }
+  }
+
+  async createUserProfile(profile: InsertUserProfile): Promise<UserProfile> {
+    const id = this.currentProfileId++;
+    const created: UserProfile = {
+      id,
+      ...profile,
+      compatibilityScore: null,
+      lastAnalyzed: new Date(),
+      createdAt: new Date()
+    };
+    this.profiles.set(id, created);
+    return created;
+  }
+
+  async getUserProfile(userId: number): Promise<UserProfile | undefined> {
+    return Array.from(this.profiles.values()).find(p => p.userId === userId);
+  }
+
+  async updateUserProfile(userId: number, updates: Partial<UserProfile>): Promise<void> {
+    const profile = Array.from(this.profiles.entries()).find(([_, p]) => p.userId === userId);
+    if (profile) {
+      const [id, existing] = profile;
+      this.profiles.set(id, { ...existing, ...updates });
+    }
   }
 }
 
@@ -161,16 +318,16 @@ class StorageManager {
     return await this.memStorage.getUser(id);
   }
 
-  async getUserByEmail(email: string): Promise<User | undefined> {
+  async getUserByPhoneNumber(phoneNumber: string): Promise<User | undefined> {
     try {
       if (this.useDatabase) {
-        return await this.databaseStorage.getUserByEmail(email);
+        return await this.databaseStorage.getUserByPhoneNumber(phoneNumber);
       }
     } catch (error) {
       log(`Database error, falling back to memory storage: ${error}`, 'storage');
       this.setFallback();
     }
-    return await this.memStorage.getUserByEmail(email);
+    return await this.memStorage.getUserByPhoneNumber(phoneNumber);
   }
 
   async createUser(user: InsertUser): Promise<User> {
@@ -185,16 +342,106 @@ class StorageManager {
     return await this.memStorage.createUser(user);
   }
 
-  async authenticateUser(email: string, password: string): Promise<User | null> {
+  async markPhoneAsVerified(userId: number): Promise<void> {
     try {
       if (this.useDatabase) {
-        return await this.databaseStorage.authenticateUser(email, password);
+        await this.databaseStorage.markPhoneAsVerified(userId);
+        return;
       }
     } catch (error) {
       log(`Database error, falling back to memory storage: ${error}`, 'storage');
       this.setFallback();
     }
-    return await this.memStorage.authenticateUser(email, password);
+    await this.memStorage.markPhoneAsVerified(userId);
+  }
+
+  // Phone verification methods with fallback
+  async createPhoneVerification(verification: InsertPhoneVerification): Promise<PhoneVerification> {
+    try {
+      if (this.useDatabase) {
+        return await this.databaseStorage.createPhoneVerification(verification);
+      }
+    } catch (error) {
+      log(`Database error, falling back to memory storage: ${error}`, 'storage');
+      this.setFallback();
+    }
+    return await this.memStorage.createPhoneVerification(verification);
+  }
+
+  async getLatestPhoneVerification(phoneNumber: string): Promise<PhoneVerification | undefined> {
+    try {
+      if (this.useDatabase) {
+        return await this.databaseStorage.getLatestPhoneVerification(phoneNumber);
+      }
+    } catch (error) {
+      log(`Database error, falling back to memory storage: ${error}`, 'storage');
+      this.setFallback();
+    }
+    return await this.memStorage.getLatestPhoneVerification(phoneNumber);
+  }
+
+  async incrementVerificationAttempts(verificationId: number): Promise<void> {
+    try {
+      if (this.useDatabase) {
+        await this.databaseStorage.incrementVerificationAttempts(verificationId);
+        return;
+      }
+    } catch (error) {
+      log(`Database error, falling back to memory storage: ${error}`, 'storage');
+      this.setFallback();
+    }
+    await this.memStorage.incrementVerificationAttempts(verificationId);
+  }
+
+  async markVerificationAsUsed(verificationId: number): Promise<void> {
+    try {
+      if (this.useDatabase) {
+        await this.databaseStorage.markVerificationAsUsed(verificationId);
+        return;
+      }
+    } catch (error) {
+      log(`Database error, falling back to memory storage: ${error}`, 'storage');
+      this.setFallback();
+    }
+    await this.memStorage.markVerificationAsUsed(verificationId);
+  }
+
+  // User profile methods with fallback
+  async createUserProfile(profile: InsertUserProfile): Promise<UserProfile> {
+    try {
+      if (this.useDatabase) {
+        return await this.databaseStorage.createUserProfile(profile);
+      }
+    } catch (error) {
+      log(`Database error, falling back to memory storage: ${error}`, 'storage');
+      this.setFallback();
+    }
+    return await this.memStorage.createUserProfile(profile);
+  }
+
+  async getUserProfile(userId: number): Promise<UserProfile | undefined> {
+    try {
+      if (this.useDatabase) {
+        return await this.databaseStorage.getUserProfile(userId);
+      }
+    } catch (error) {
+      log(`Database error, falling back to memory storage: ${error}`, 'storage');
+      this.setFallback();
+    }
+    return await this.memStorage.getUserProfile(userId);
+  }
+
+  async updateUserProfile(userId: number, updates: Partial<UserProfile>): Promise<void> {
+    try {
+      if (this.useDatabase) {
+        await this.databaseStorage.updateUserProfile(userId, updates);
+        return;
+      }
+    } catch (error) {
+      log(`Database error, falling back to memory storage: ${error}`, 'storage');
+      this.setFallback();
+    }
+    await this.memStorage.updateUserProfile(userId, updates);
   }
 }
 

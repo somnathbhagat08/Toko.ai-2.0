@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "web"]
+modules = ["nodejs-20", "web", "postgresql-16"]
 run = "npm run dev"
 
 [nix]
@@ -12,10 +12,6 @@ build = ["npm", "run", "build"]
 [[ports]]
 localPort = 5000
 externalPort = 80
-
-[[ports]]
-localPort = 46247
-externalPort = 3001
 
 [workflows]
 runButton = "Project"
@@ -56,3 +52,4 @@ waitForPort = 5000
 
 [agent]
 expertMode = true
+integrations = ["javascript_database:1.0.0", "javascript_openai:1.0.0"]
