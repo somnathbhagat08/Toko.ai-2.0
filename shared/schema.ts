@@ -55,6 +55,8 @@ export const insertUserSchema = createInsertSchema(users).pick({
   gender: true,
   age: true,
   bio: true,
+}).extend({
+  avatar: z.string().nullable().optional()
 });
 
 export const insertPhoneVerificationSchema = createInsertSchema(phoneVerifications).pick({

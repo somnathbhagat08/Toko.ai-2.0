@@ -96,6 +96,15 @@ class PhoneAuthService {
         };
       }
 
+      // Check if verification is already used
+      if (verification.isVerified) {
+        monitoring.incrementCounter('phone_auth.otp_already_used');
+        return {
+          success: false,
+          message: 'This OTP has already been used. Please request a new one.'
+        };
+      }
+
       // Check if OTP has expired
       if (new Date() > verification.expiresAt) {
         monitoring.incrementCounter('phone_auth.otp_expired');

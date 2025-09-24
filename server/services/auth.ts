@@ -108,16 +108,16 @@ class AuthService {
       }
 
       // Create session
-      await this.createSession(user.id, {
-        userId: user.id,
-        email: user.email,
+      await this.createSession(user.id.toString(), {
+        userId: user.id.toString(),
+        phoneNumber: user.phoneNumber,
         loginTime: Date.now(),
         lastActivity: Date.now(),
         deviceInfo: credentials.deviceInfo,
         ipAddress: credentials.ipAddress
       });
 
-      log(`User logged in: ${user.email}`, 'auth');
+      log(`User logged in: ${user.phoneNumber}`, 'auth');
       monitoring.incrementCounter('auth.successful_logins');
 
       return await this.generateTokens(user);
