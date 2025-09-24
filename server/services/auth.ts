@@ -18,7 +18,7 @@ interface AuthTokenPayload {
 interface LoginResult {
   user: {
     id: string;
-    email: string;
+    phoneNumber: string;
     name: string;
     avatar?: string;
   };
@@ -29,7 +29,7 @@ interface LoginResult {
 
 interface SessionData {
   userId: string;
-  email: string;
+  phoneNumber: string;
   loginTime: number;
   lastActivity: number;
   deviceInfo?: string;
@@ -101,7 +101,7 @@ class AuthService {
       }
 
       // Check for account blocks/bans
-      const isBlocked = await this.isUserBlocked(user.id);
+      const isBlocked = await this.isUserBlocked(user.id.toString());
       if (isBlocked) {
         monitoring.incrementCounter('auth.blocked_attempts');
         throw new Error('Account is temporarily blocked');
@@ -224,7 +224,7 @@ class AuthService {
 
     return {
       user: {
-        id: user.id,
+        id: user.id.toString(),
         phoneNumber: user.phoneNumber,
         name: user.name,
         avatar: user.avatar
@@ -356,11 +356,11 @@ class AuthService {
     // Store reset token in Redis with short expiry
     await redisManager.setSession(`reset:${resetToken}`, {
       userId: user.id,
-      email: user.email,
+      phoneNumber: user.phoneNumber,
       createdAt: Date.now()
     }, 3600); // 1 hour
 
-    log(`Password reset token generated for: ${email}`, 'auth');
+    log(`Password reset token generated for: ${user.phoneNumber}`, 'auth');
     monitoring.incrementCounter('auth.password_reset_requests');
 
     return resetToken;
@@ -369,7 +369,7 @@ class AuthService {
   /**
    * Verify password reset token
    */
-  async verifyPasswordResetToken(token: string): Promise<{ userId: string; email: string }> {
+  async verifyPasswordResetToken(token: string): Promise<{ userId: string; phoneNumber: string }> {
     try {
       const decoded = jwt.verify(token, this.jwtSecret) as any;
       
@@ -384,7 +384,7 @@ class AuthService {
 
       return {
         userId: resetData.userId,
-        email: resetData.email
+        phoneNumber: resetData.phoneNumber
       };
     } catch (error) {
       monitoring.trackError('auth_reset_verify', `Reset token verification failed: ${error}`);

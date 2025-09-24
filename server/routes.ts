@@ -319,10 +319,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         phoneNumber: userData.phoneNumber,
         name: userData.name,
         gender: userData.gender,
-        avatar: userData.avatar || undefined,
-        provider: userData.provider,
-        age: userData.age,
-        bio: userData.bio
+        avatar: userData.avatar ?? undefined,
+        provider: userData.provider ?? undefined,
+        age: userData.age ?? undefined,
+        bio: userData.bio ?? undefined
       });
       
       // Analyze user profile with AI if bio provided
@@ -331,7 +331,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           parseInt(loginResult.user.id.toString()), 
           userData.bio, 
           userData.tags || [],
-          userData.age
+          userData.age ?? undefined
         );
       }
       
