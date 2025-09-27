@@ -51,6 +51,24 @@ const CURRENT_VIBE_OPTIONS = [
     id: 'Adventurous', 
     label: 'ADVENTUROUS', 
     icon: <TrendingUp className="w-5 h-5" />
+  },
+  { 
+    id: 'Mysterious', 
+    label: 'MYSTERIOUS', 
+    icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
+      </svg>
+    )
+  },
+  { 
+    id: 'Playful', 
+    label: 'PLAYFUL', 
+    icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M9.5 11H11v5.5H9.5zm5-4.5H16V11h-1.5zM12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+      </svg>
+    )
   }
 ];
 
@@ -89,6 +107,20 @@ const CONVERSATION_MOOD_OPTIONS = [
     id: 'Intellectual', 
     label: 'INTELLECTUAL', 
     icon: <Star className="w-5 h-5" />
+  },
+  { 
+    id: 'Romantic', 
+    label: 'ROMANTIC', 
+    icon: <Heart className="w-5 h-5" />
+  },
+  { 
+    id: 'Philosophical', 
+    label: 'PHILOSOPHICAL', 
+    icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+      </svg>
+    )
   }
 ];
 
@@ -416,7 +448,7 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
               </p>
               <button
                 onClick={() => setShowRealName(!showRealName)}
-                className="text-black hover:text-green-600 transition-colors flex-shrink-0"
+                className="text-black hover:text-cyan-600 transition-colors flex-shrink-0"
                 title={showRealName ? "Hide name for privacy" : "Show real name"}
               >
                 {showRealName ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
@@ -424,7 +456,7 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
             </div>
             <button
               onClick={onLogout}
-              className="bg-black text-white border-3 border-black px-3 sm:px-4 py-2 font-black transition-all shadow-[4px_4px_0px_0px_#666] hover:shadow-[5px_5px_0px_0px_#00FF88] hover:bg-green-400 hover:translate-x-[-1px] hover:translate-y-[-1px] active:shadow-[3px_3px_0px_0px_#8A2BE2] active:bg-purple-500 flex-shrink-0 text-xs sm:text-sm"
+              className="bg-black text-white border-3 border-black px-3 sm:px-4 py-2 font-black transition-all shadow-[4px_4px_0px_0px_#666] hover:shadow-[5px_5px_0px_0px_#FF00FF] hover:bg-cyan-400 hover:translate-x-[-1px] hover:translate-y-[-1px] active:shadow-[3px_3px_0px_0px_#8A2BE2] active:bg-purple-500 flex-shrink-0 text-xs sm:text-sm"
             >
               LOGOUT
             </button>
@@ -458,10 +490,10 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
                 <button
                   key={option.id}
                   onClick={() => setCurrentVibe(option.id)}
-                  className={`p-3 border-2 border-black font-bold transition-all shadow-[2px_2px_0px_0px_#000] hover:shadow-[3px_3px_0px_0px_#00FF88] hover:translate-x-[-1px] hover:translate-y-[-1px] text-sm flex flex-col items-center gap-2 ${
+                  className={`p-3 border-2 border-black font-bold transition-all shadow-[2px_2px_0px_0px_#000] hover:shadow-[3px_3px_0px_0px_#00FFFF] hover:translate-x-[-1px] hover:translate-y-[-1px] text-sm flex flex-col items-center gap-2 ${
                     currentVibe === option.id
-                      ? 'bg-black text-white hover:bg-green-400'
-                      : 'bg-gray-100 text-black hover:bg-green-200'
+                      ? 'bg-black text-white hover:bg-cyan-500'
+                      : 'bg-gray-100 text-black hover:bg-orange-300'
                   }`}
                   data-testid={`button-vibe-${option.id}`}
                 >
@@ -474,7 +506,7 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
             {/* Tip section */}
             <div className="mt-4 p-2 bg-gray-50 border-2 border-black">
               <p className="text-xs font-bold text-gray-700 text-center">
-                <span className="text-green-600">💡</span> Your vibe attracts similar energy<br/>
+                <span className="text-cyan-600">💡</span> Your vibe attracts similar energy<br/>
                 AI analyzes your expressions for better matches
               </p>
             </div>
@@ -492,10 +524,10 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
                 <button
                   key={option.id}
                   onClick={() => setConversationMood(option.id)}
-                  className={`p-3 border-2 border-black font-bold transition-all shadow-[2px_2px_0px_0px_#000] hover:shadow-[3px_3px_0px_0px_#00FF88] hover:translate-x-[-1px] hover:translate-y-[-1px] text-sm flex flex-col items-center gap-2 ${
+                  className={`p-3 border-2 border-black font-bold transition-all shadow-[2px_2px_0px_0px_#000] hover:shadow-[3px_3px_0px_0px_#FF00FF] hover:translate-x-[-1px] hover:translate-y-[-1px] text-sm flex flex-col items-center gap-2 ${
                     conversationMood === option.id
-                      ? 'bg-black text-white hover:bg-green-400'
-                      : 'bg-gray-100 text-black hover:bg-green-200'
+                      ? 'bg-black text-white hover:bg-purple-500'
+                      : 'bg-gray-100 text-black hover:bg-pink-300'
                   }`}
                   data-testid={`button-mood-${option.id}`}
                 >
@@ -508,7 +540,7 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
             {/* Info section */}
             <div className="mt-auto p-3 bg-gray-50 border-2 border-black">
               <p className="text-xs font-bold text-gray-700 text-center">
-                <span className="text-green-600">🗣️</span> India-only connections<br/>
+                <span className="text-purple-600">🗣️</span> India-only connections<br/>
                 Set your conversation style for better matches
               </p>
             </div>
@@ -543,7 +575,7 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
             <div className="mb-3">
               <button
                 onClick={() => setShowVibePopup(true)}
-                className="w-full px-3 py-3 border-3 border-black font-black bg-gradient-to-r from-purple-400 to-pink-500 text-black focus:outline-none hover:from-yellow-400 hover:to-green-500 text-sm shadow-[3px_3px_0px_0px_#000] hover:shadow-[4px_4px_0px_0px_#00FF88] hover:translate-x-[-1px] hover:translate-y-[-1px] cursor-pointer"
+                className="w-full px-3 py-3 border-3 border-black font-black bg-gradient-to-r from-purple-400 to-pink-500 text-black focus:outline-none hover:from-cyan-400 hover:to-orange-400 text-sm shadow-[3px_3px_0px_0px_#000] hover:shadow-[4px_4px_0px_0px_#FF00FF] hover:translate-x-[-1px] hover:translate-y-[-1px] cursor-pointer transition-all"
               >
                 SELECT VIBES
               </button>
@@ -596,7 +628,7 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
                 {/* Text Chat Button */}
                 <button
                   onClick={() => handleStartChat('text')}
-                  className="w-full bg-black text-white hover:bg-green-400 border-3 border-black px-4 py-4 text-sm font-black transition-all shadow-[4px_4px_0px_0px_#000] hover:shadow-[6px_6px_0px_0px_#00FF88] hover:translate-x-[-1px] hover:translate-y-[-1px] active:bg-purple-500 flex items-center justify-center gap-3 touch-manipulation min-h-[80px]"
+                  className="w-full bg-black text-white hover:bg-cyan-500 border-3 border-black px-4 py-4 text-sm font-black transition-all shadow-[4px_4px_0px_0px_#000] hover:shadow-[6px_6px_0px_0px_#00FFFF] hover:translate-x-[-1px] hover:translate-y-[-1px] active:bg-purple-500 flex items-center justify-center gap-3 touch-manipulation min-h-[80px]" data-testid="button-chat-text"
                 >
                   <MessageCircle className="w-6 h-6 sm:w-8 sm:h-8" />
                   <span className="text-base sm:text-lg">TEXT CHAT</span>
@@ -605,7 +637,7 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
                 {/* Video Chat Button */}
                 <button
                   onClick={() => handleStartChat('video')}
-                  className="w-full bg-black text-white hover:bg-green-400 border-3 border-black px-4 py-4 text-sm font-black transition-all shadow-[4px_4px_0px_0px_#000] hover:shadow-[6px_6px_0px_0px_#00FF88] hover:translate-x-[-1px] hover:translate-y-[-1px] active:bg-purple-500 flex items-center justify-center gap-3 touch-manipulation min-h-[80px]"
+                  className="w-full bg-black text-white hover:bg-orange-500 border-3 border-black px-4 py-4 text-sm font-black transition-all shadow-[4px_4px_0px_0px_#000] hover:shadow-[6px_6px_0px_0px_#FF8000] hover:translate-x-[-1px] hover:translate-y-[-1px] active:bg-purple-500 flex items-center justify-center gap-3 touch-manipulation min-h-[80px]" data-testid="button-chat-video"
                 >
                   <Video className="w-6 h-6 sm:w-8 sm:h-8" />
                   <span className="text-base sm:text-lg">VIDEO CHAT</span>
@@ -615,7 +647,7 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
               {/* Info section */}
               <div className="mt-auto p-3 bg-gray-50 border-2 border-black">
                 <p className="text-xs font-bold text-gray-700 text-center">
-                  <span className="text-green-600">🚀</span> Choose your preferred chat mode<br/>
+                  <span className="text-orange-600">🚀</span> Choose your preferred chat mode<br/>
                   Both modes support instant matching
                 </p>
               </div>
