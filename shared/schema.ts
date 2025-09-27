@@ -8,9 +8,10 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   avatar: text("avatar"),
   provider: text("provider").default("phone"), // 'phone', 'google'
-  country: text("country").default("Any on Earth"), // User's preferred country to match with
+  currentVibe: varchar("current_vibe", { length: 50 }).default("Chill"), // Current vibe/energy level
+  vibePreferences: text("vibe_preferences").array().default([]), // Preferred vibes to match with
+  conversationMood: varchar("conversation_mood", { length: 50 }).default("Casual"), // Preferred conversation style
   tags: text("tags").array().default([]), // User tags/interests for matching
-  gender: varchar("gender", { length: 10 }).notNull(), // 'male', 'female', 'other'
   age: integer("age"),
   bio: text("bio"), // User bio for AI analysis
   personalityVector: real("personality_vector").array(), // AI-generated personality vector for matching
@@ -40,6 +41,9 @@ export const userProfiles = pgTable("user_profiles", {
   conversationStyle: text("conversation_style"), // AI-analyzed conversation preferences
   topicPreferences: text("topic_preferences").array(), // Preferred conversation topics
   personalityTraits: text("personality_traits").array(), // AI-extracted personality traits
+  vibeCompatibility: real("vibe_compatibility"), // Vibe-based compatibility score
+  moodAnalysis: text("mood_analysis"), // AI-detected mood from face analysis
+  emotionalState: varchar("emotional_state", { length: 50 }), // Current emotional state
   compatibilityScore: real("compatibility_score"), // Overall compatibility rating
   lastAnalyzed: timestamp("last_analyzed").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -50,9 +54,10 @@ export const insertUserSchema = createInsertSchema(users).pick({
   name: true,
   avatar: true,
   provider: true,
-  country: true,
+  currentVibe: true,
+  vibePreferences: true,
+  conversationMood: true,
   tags: true,
-  gender: true,
   age: true,
   bio: true,
 }).extend({
@@ -70,6 +75,9 @@ export const insertUserProfileSchema = createInsertSchema(userProfiles).pick({
   conversationStyle: true,
   topicPreferences: true,
   personalityTraits: true,
+  vibeCompatibility: true,
+  moodAnalysis: true,
+  emotionalState: true,
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;

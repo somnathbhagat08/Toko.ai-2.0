@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { MessageCircle, Video, Users, Zap, User, Star, Circle, Square, Triangle, UserCheck, Heart, Lock, Unlock, TrendingUp } from 'lucide-react';
 import TokoLogo from './TokoLogo';
-import InteractiveGlobe from './InteractiveGlobe';
+// InteractiveGlobe removed - India-only platform
 
 import { io, Socket } from 'socket.io-client';
 
 interface HomePageProps {
-  onStartChat: (vibes: string[], mode: 'text' | 'video', genderPreference?: string, countryPreference?: string) => void;
+  onStartChat: (vibes: string[], mode: 'text' | 'video', currentVibe?: string, conversationMood?: string) => void;
   user: any;
   onLogout: () => void;
 }
@@ -17,116 +17,78 @@ const SUGGESTED_VIBES = [
   'Cooking', 'Sports', 'Movies', 'Entrepreneurship', 'Podcasts', 'Dancing'
 ];
 
-const COUNTRY_OPTIONS = [
-  { name: 'Any on Earth', flag: '🌍' },
-  { name: 'United States', flag: '🇺🇸' },
-  { name: 'United Kingdom', flag: '🇬🇧' },
-  { name: 'Canada', flag: '🇨🇦' },
-  { name: 'Australia', flag: '🇦🇺' },
-  { name: 'Germany', flag: '🇩🇪' },
-  { name: 'France', flag: '🇫🇷' },
-  { name: 'Spain', flag: '🇪🇸' },
-  { name: 'Italy', flag: '🇮🇹' },
-  { name: 'Netherlands', flag: '🇳🇱' },
-  { name: 'Sweden', flag: '🇸🇪' },
-  { name: 'Norway', flag: '🇳🇴' },
-  { name: 'India', flag: '🇮🇳' },
-  { name: 'Japan', flag: '🇯🇵' },
-  { name: 'South Korea', flag: '🇰🇷' },
-  { name: 'China', flag: '🇨🇳' },
-  { name: 'Singapore', flag: '🇸🇬' },
-  { name: 'Brazil', flag: '🇧🇷' },
-  { name: 'Mexico', flag: '🇲🇽' },
-  { name: 'Argentina', flag: '🇦🇷' },
-  { name: 'South Africa', flag: '🇿🇦' },
-  { name: 'Nigeria', flag: '🇳🇬' },
-  { name: 'Egypt', flag: '🇪🇬' },
-  { name: 'Turkey', flag: '🇹🇷' },
-  { name: 'Russia', flag: '🇷🇺' },
-  { name: 'Poland', flag: '🇵🇱' },
-  { name: 'Ukraine', flag: '🇺🇦' },
-  { name: 'Czech Republic', flag: '🇨🇿' },
-  { name: 'Romania', flag: '🇷🇴' },
-  { name: 'Hungary', flag: '🇭🇺' },
-  { name: 'Greece', flag: '🇬🇷' },
-  { name: 'Portugal', flag: '🇵🇹' },
-  { name: 'Belgium', flag: '🇧🇪' },
-  { name: 'Austria', flag: '🇦🇹' },
-  { name: 'Switzerland', flag: '🇨🇭' },
-  { name: 'Denmark', flag: '🇩🇰' },
-  { name: 'Finland', flag: '🇫🇮' },
-  { name: 'Ireland', flag: '🇮🇪' },
-  { name: 'New Zealand', flag: '🇳🇿' },
-  { name: 'Thailand', flag: '🇹🇭' },
-  { name: 'Vietnam', flag: '🇻🇳' },
-  { name: 'Philippines', flag: '🇵🇭' },
-  { name: 'Malaysia', flag: '🇲🇾' },
-  { name: 'Indonesia', flag: '🇮🇩' },
-  { name: 'Pakistan', flag: '🇵🇰' },
-  { name: 'Bangladesh', flag: '🇧🇩' },
-  { name: 'Sri Lanka', flag: '🇱🇰' },
-  { name: 'Israel', flag: '🇮🇱' },
-  { name: 'UAE', flag: '🇦🇪' },
-  { name: 'Saudi Arabia', flag: '🇸🇦' },
-  { name: 'Iran', flag: '🇮🇷' },
-  { name: 'Iraq', flag: '🇮🇶' },
-  { name: 'Jordan', flag: '🇯🇴' },
-  { name: 'Lebanon', flag: '🇱🇧' },
-  { name: 'Morocco', flag: '🇲🇦' },
-  { name: 'Algeria', flag: '🇩🇿' },
-  { name: 'Tunisia', flag: '🇹🇳' },
-  { name: 'Kenya', flag: '🇰🇪' },
-  { name: 'Ghana', flag: '🇬🇭' },
-  { name: 'Ethiopia', flag: '🇪🇹' },
-  { name: 'Tanzania', flag: '🇹🇿' },
-  { name: 'Uganda', flag: '🇺🇬' },
-  { name: 'Zimbabwe', flag: '🇿🇼' },
-  { name: 'Botswana', flag: '🇧🇼' },
-  { name: 'Namibia', flag: '🇳🇦' },
-  { name: 'Chile', flag: '🇨🇱' },
-  { name: 'Peru', flag: '🇵🇪' },
-  { name: 'Colombia', flag: '🇨🇴' },
-  { name: 'Venezuela', flag: '🇻🇪' },
-  { name: 'Ecuador', flag: '🇪🇨' },
-  { name: 'Uruguay', flag: '🇺🇾' },
-  { name: 'Paraguay', flag: '🇵🇾' },
-  { name: 'Bolivia', flag: '🇧🇴' }
+// Country options removed - India-only platform
+
+const CURRENT_VIBE_OPTIONS = [
+  { 
+    id: 'Chill', 
+    label: 'CHILL', 
+    icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
+      </svg>
+    )
+  },
+  { 
+    id: 'Energetic', 
+    label: 'ENERGETIC', 
+    icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M7 2v11h3v9l7-12h-4l3-8z"/>
+      </svg>
+    )
+  },
+  { 
+    id: 'Creative', 
+    label: 'CREATIVE', 
+    icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+      </svg>
+    )
+  },
+  { 
+    id: 'Adventurous', 
+    label: 'ADVENTUROUS', 
+    icon: <TrendingUp className="w-5 h-5" />
+  }
 ];
 
-const GENDER_OPTIONS = [
+const CONVERSATION_MOOD_OPTIONS = [
   { 
-    id: 'male', 
-    label: 'MALE', 
+    id: 'Casual', 
+    label: 'CASUAL', 
     icon: (
       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-        <circle cx="12" cy="8" r="5"/>
-        <path d="M12 13v8m0 0h-3m3 0h3"/>
-        <path d="M15 3l6 6m0 0h-4m4 0v-4"/>
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
       </svg>
     )
   },
   { 
-    id: 'female', 
-    label: 'FEMALE', 
+    id: 'Deep', 
+    label: 'DEEP', 
     icon: (
       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-        <circle cx="12" cy="8" r="5"/>
-        <path d="M12 13v8m0 0h-3m3 0h3"/>
-        <circle cx="12" cy="19" r="2"/>
+        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
       </svg>
     )
   },
   { 
-    id: 'lgbtq', 
-    label: 'LGBTQ+', 
+    id: 'Funny', 
+    label: 'FUNNY', 
     icon: (
-      <div className="w-5 h-5 rounded-full bg-gradient-to-r from-red-500 via-yellow-500 via-green-500 via-blue-500 via-indigo-500 to-purple-500 border-2 border-black"></div>
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+        <circle cx="9" cy="9" r="1.5"/>
+        <circle cx="15" cy="9" r="1.5"/>
+        <path d="M8 13s1 3 4 3 4-3 4-3"/>
+      </svg>
     )
   },
   { 
-    id: 'any', 
-    label: 'ANY', 
-    icon: <Heart className="w-5 h-5" />
+    id: 'Intellectual', 
+    label: 'INTELLECTUAL', 
+    icon: <Star className="w-5 h-5" />
   }
 ];
 
@@ -152,12 +114,12 @@ interface PlatformStats {
 export default function HomePage({ onStartChat, user, onLogout }: HomePageProps) {
   const [vibes, setVibes] = useState<string[]>([]);
   const [customVibe, setCustomVibe] = useState('');
-  const [genderPreference, setGenderPreference] = useState<string>('any');
-  const [countryPreference, setCountryPreference] = useState<string>('Any on Earth');
+  const [currentVibe, setCurrentVibe] = useState<string>('Chill');
+  const [conversationMood, setConversationMood] = useState<string>('Casual');
   const [showRealName, setShowRealName] = useState(false);
-  const [showCountryPopup, setShowCountryPopup] = useState(false);
+  // Remove country popup as we're India-only now
   const [showVibePopup, setShowVibePopup] = useState(false);
-  const [countrySearch, setCountrySearch] = useState('');
+  // Country search removed - India only
   const [vibeSearch, setVibeSearch] = useState('');
 
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -232,10 +194,7 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
     }
   };
 
-  // Filter functions for search
-  const filteredCountries = COUNTRY_OPTIONS.filter(country =>
-    country.name.toLowerCase().includes(countrySearch.toLowerCase())
-  );
+  // Filter functions for search - country search removed (India-only)
 
   const filteredVibes = SUGGESTED_VIBES.filter(vibe =>
     vibe.toLowerCase().includes(vibeSearch.toLowerCase())
@@ -244,7 +203,7 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
 
 
   const handleStartChat = (mode: 'text' | 'video') => {
-    onStartChat(vibes, mode, genderPreference, countryPreference);
+    onStartChat(vibes, mode, currentVibe, conversationMood);
   };
 
   return (
@@ -487,23 +446,24 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
         {/* Main Selection Grid - Responsive for mobile */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 flex-1 auto-rows-fr">
 
-          {/* Gender Preference - Extended height */}
+          {/* Current Vibe - Extended height */}
           <div className="bg-white border-4 border-black p-4 shadow-[8px_8px_0px_0px_#000] h-full flex flex-col">
             <h3 className="text-lg font-black mb-3 flex items-center gap-2 text-black">
-              <UserCheck className="w-5 h-5" />
-              PREFERRED GENDER
+              <Zap className="w-5 h-5" />
+              CURRENT VIBE
             </h3>
 
             <div className="grid grid-cols-2 gap-3 flex-grow">
-              {GENDER_OPTIONS.map(option => (
+              {CURRENT_VIBE_OPTIONS.map(option => (
                 <button
                   key={option.id}
-                  onClick={() => setGenderPreference(option.id)}
+                  onClick={() => setCurrentVibe(option.id)}
                   className={`p-3 border-2 border-black font-bold transition-all shadow-[2px_2px_0px_0px_#000] hover:shadow-[3px_3px_0px_0px_#00FF88] hover:translate-x-[-1px] hover:translate-y-[-1px] text-sm flex flex-col items-center gap-2 ${
-                    genderPreference === option.id
+                    currentVibe === option.id
                       ? 'bg-black text-white hover:bg-green-400'
                       : 'bg-gray-100 text-black hover:bg-green-200'
                   }`}
+                  data-testid={`button-vibe-${option.id}`}
                 >
                   <div>{option.icon}</div>
                   {option.label}
@@ -514,42 +474,42 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
             {/* Tip section */}
             <div className="mt-4 p-2 bg-gray-50 border-2 border-black">
               <p className="text-xs font-bold text-gray-700 text-center">
-                <span className="text-green-600">💡</span> Choose "ANY" for fastest connections<br/>
-                Specific selection improves match quality
+                <span className="text-green-600">💡</span> Your vibe attracts similar energy<br/>
+                AI analyzes your expressions for better matches
               </p>
             </div>
           </div>
 
-          {/* Country Preference - Popup */}
+          {/* Conversation Mood */}
           <div className="bg-white border-4 border-black p-4 shadow-[8px_8px_0px_0px_#000] h-full flex flex-col">
             <h3 className="text-lg font-black mb-3 flex items-center gap-2 text-black">
-              <div className="w-5 h-5 rounded-full bg-green-400 border-2 border-black"></div>
-              COUNTRY
+              <MessageCircle className="w-5 h-5" />
+              CONVERSATION MOOD
             </h3>
 
-            {/* Select button */}
-            <div className="mb-3">
-              <button
-                onClick={() => setShowCountryPopup(true)}
-                className="w-full px-3 py-3 border-3 border-black font-black bg-gradient-to-r from-green-400 to-blue-500 text-black focus:outline-none hover:from-yellow-400 hover:to-pink-500 text-sm shadow-[3px_3px_0px_0px_#000] hover:shadow-[4px_4px_0px_0px_#00FF88] hover:translate-x-[-1px] hover:translate-y-[-1px] cursor-pointer"
-              >
-                SELECT COUNTRY
-              </button>
-            </div>
-
-            {/* Selected display */}
-            <div className="mb-3">
-              <div className="text-sm font-bold mb-2">Selected:</div>
-              <span className="bg-black text-white px-3 py-2 text-sm font-bold rounded flex items-center gap-2">
-                <span className="flag-emoji">{COUNTRY_OPTIONS.find(c => c.name === countryPreference)?.flag}</span> {countryPreference}
-              </span>
+            <div className="grid grid-cols-2 gap-3 flex-grow">
+              {CONVERSATION_MOOD_OPTIONS.map(option => (
+                <button
+                  key={option.id}
+                  onClick={() => setConversationMood(option.id)}
+                  className={`p-3 border-2 border-black font-bold transition-all shadow-[2px_2px_0px_0px_#000] hover:shadow-[3px_3px_0px_0px_#00FF88] hover:translate-x-[-1px] hover:translate-y-[-1px] text-sm flex flex-col items-center gap-2 ${
+                    conversationMood === option.id
+                      ? 'bg-black text-white hover:bg-green-400'
+                      : 'bg-gray-100 text-black hover:bg-green-200'
+                  }`}
+                  data-testid={`button-mood-${option.id}`}
+                >
+                  <div>{option.icon}</div>
+                  {option.label}
+                </button>
+              ))}
             </div>
 
             {/* Info section */}
             <div className="mt-auto p-3 bg-gray-50 border-2 border-black">
               <p className="text-xs font-bold text-gray-700 text-center">
-                <span className="text-green-600">🌍</span> Choose "Any on Earth" for global connections<br/>
-                Specific countries help find local matches
+                <span className="text-green-600">🗣️</span> India-only connections<br/>
+                Set your conversation style for better matches
               </p>
             </div>
           </div>
@@ -673,17 +633,7 @@ export default function HomePage({ onStartChat, user, onLogout }: HomePageProps)
         </div>
       </div>
 
-      {/* Country Selection Globe */}
-      {showCountryPopup && (
-        <InteractiveGlobe
-          selectedCountry={countryPreference}
-          onSelectCountry={(country) => {
-            setCountryPreference(country);
-            setShowCountryPopup(false);
-          }}
-          onClose={() => setShowCountryPopup(false)}
-        />
-      )}
+      {/* Country selection removed - India-only platform */}
 
       {/* Vibe Selection Popup - Mobile responsive */}
       {showVibePopup && (
