@@ -3,6 +3,7 @@ import { io, Socket } from 'socket.io-client';
 class SocketService {
   private socket: Socket | null = null;
   private isConnected = false;
+  private eventHandlers: Map<string, Function[]> = new Map();
 
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -47,10 +48,45 @@ class SocketService {
 
   disconnect() {
     if (this.socket) {
+      this.removeAllEventHandlers();
       this.socket.disconnect();
       this.socket = null;
       this.isConnected = false;
     }
+  }
+
+  private registerHandler(event: string, handler: Function) {
+    if (!this.eventHandlers.has(event)) {
+      this.eventHandlers.set(event, []);
+    }
+    this.eventHandlers.get(event)!.push(handler);
+  }
+
+  removeEventHandler(event: string, handler?: Function) {
+    if (!this.socket) return;
+
+    if (handler) {
+      this.socket.off(event, handler as any);
+      const handlers = this.eventHandlers.get(event);
+      if (handlers) {
+        const index = handlers.indexOf(handler);
+        if (index > -1) {
+          handlers.splice(index, 1);
+        }
+      }
+    } else {
+      this.socket.off(event);
+      this.eventHandlers.delete(event);
+    }
+  }
+
+  removeAllEventHandlers() {
+    if (!this.socket) return;
+
+    Array.from(this.eventHandlers.keys()).forEach(event => {
+      this.socket!.off(event);
+    });
+    this.eventHandlers.clear();
   }
 
   // Queue management
@@ -113,56 +149,74 @@ class SocketService {
   // Event listeners
   onMatchFound(callback: (data: any) => void) {
     if (this.socket) {
+      this.removeEventHandler('match-found');
       this.socket.on('match-found', callback);
+      this.registerHandler('match-found', callback);
     }
   }
 
   onWaitingForMatch(callback: () => void) {
     if (this.socket) {
+      this.removeEventHandler('waiting-for-match');
       this.socket.on('waiting-for-match', callback);
+      this.registerHandler('waiting-for-match', callback);
     }
   }
 
   onReceiveMessage(callback: (data: any) => void) {
     if (this.socket) {
+      this.removeEventHandler('receive-message');
       this.socket.on('receive-message', callback);
+      this.registerHandler('receive-message', callback);
     }
   }
 
   onUserTyping(callback: (isTyping: boolean) => void) {
     if (this.socket) {
+      this.removeEventHandler('user-typing');
       this.socket.on('user-typing', callback);
+      this.registerHandler('user-typing', callback);
     }
   }
 
   onStrangerDisconnected(callback: () => void) {
     if (this.socket) {
+      this.removeEventHandler('stranger-disconnected');
       this.socket.on('stranger-disconnected', callback);
+      this.registerHandler('stranger-disconnected', callback);
     }
   }
 
   onFindingNewMatch(callback: () => void) {
     if (this.socket) {
+      this.removeEventHandler('finding-new-match');
       this.socket.on('finding-new-match', callback);
+      this.registerHandler('finding-new-match', callback);
     }
   }
 
   // WebRTC event listeners
   onWebRTCOffer(callback: (data: any) => void) {
     if (this.socket) {
+      this.removeEventHandler('webrtc-offer');
       this.socket.on('webrtc-offer', callback);
+      this.registerHandler('webrtc-offer', callback);
     }
   }
 
   onWebRTCAnswer(callback: (data: any) => void) {
     if (this.socket) {
+      this.removeEventHandler('webrtc-answer');
       this.socket.on('webrtc-answer', callback);
+      this.registerHandler('webrtc-answer', callback);
     }
   }
 
   onWebRTCIceCandidate(callback: (data: any) => void) {
     if (this.socket) {
+      this.removeEventHandler('webrtc-ice-candidate');
       this.socket.on('webrtc-ice-candidate', callback);
+      this.registerHandler('webrtc-ice-candidate', callback);
     }
   }
 

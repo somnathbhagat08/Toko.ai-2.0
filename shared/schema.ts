@@ -14,6 +14,8 @@ export const users = pgTable("users", {
   tags: text("tags").array().default([]), // User tags/interests for matching
   age: integer("age"),
   bio: text("bio"), // User bio for AI analysis
+  profileEmbedding: real("profile_embedding").array(), // HuggingFace sentence-transformers embedding (384 dims)
+  embeddingGeneratedAt: timestamp("embedding_generated_at"), // Last time embedding was generated
   personalityVector: real("personality_vector").array(), // AI-generated personality vector for matching
   interestVector: real("interest_vector").array(), // AI-generated interest vector
   communicationStyle: varchar("communication_style", { length: 50 }), // AI-assessed communication style

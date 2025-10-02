@@ -21,6 +21,10 @@ export interface IStorage {
   createUserProfile(profile: InsertUserProfile): Promise<UserProfile>;
   getUserProfile(userId: number): Promise<UserProfile | undefined>;
   updateUserProfile(userId: number, updates: Partial<UserProfile>): Promise<void>;
+  
+  // Embedding methods
+  updateUserEmbedding(userId: number, embedding: number[]): Promise<void>;
+  getUsersWithEmbeddings(): Promise<User[]>;
 }
 
 // PostgreSQL Storage Implementation
@@ -169,6 +173,33 @@ export class DatabaseStorage implements IStorage {
       throw error;
     }
   }
+
+  async updateUserEmbedding(userId: number, embedding: number[]): Promise<void> {
+    try {
+      await db
+        .update(users)
+        .set({ 
+          profileEmbedding: embedding,
+          embeddingGeneratedAt: new Date()
+        })
+        .where(eq(users.id, userId));
+      
+      log(`Updated embedding for user ${userId}`, 'storage');
+    } catch (error) {
+      log(`Error updating user embedding: ${error}`, 'storage');
+      throw error;
+    }
+  }
+
+  async getUsersWithEmbeddings(): Promise<User[]> {
+    try {
+      const allUsers = await db.select().from(users);
+      return allUsers.filter(user => user.profileEmbedding !== null && user.profileEmbedding !== undefined);
+    } catch (error) {
+      log(`Error fetching users with embeddings: ${error}`, 'storage');
+      return [];
+    }
+  }
 }
 
 // Memory Storage Implementation (fallback)
@@ -212,6 +243,8 @@ export class MemStorage implements IStorage {
       tags: insertUser.tags || [],
       age: insertUser.age || null,
       bio: insertUser.bio || null,
+      profileEmbedding: null,
+      embeddingGeneratedAt: null,
       personalityVector: null,
       interestVector: null,
       communicationStyle: null,
@@ -298,6 +331,19 @@ export class MemStorage implements IStorage {
       const [id, existing] = profile;
       this.profiles.set(id, { ...existing, ...updates });
     }
+  }
+
+  async updateUserEmbedding(userId: number, embedding: number[]): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) {
+      user.profileEmbedding = embedding;
+      user.embeddingGeneratedAt = new Date();
+      this.users.set(userId, user);
+    }
+  }
+
+  async getUsersWithEmbeddings(): Promise<User[]> {
+    return Array.from(this.users.values()).filter(user => user.profileEmbedding !== null);
   }
 }
 
@@ -453,6 +499,31 @@ class StorageManager {
       this.setFallback();
     }
     await this.memStorage.updateUserProfile(userId, updates);
+  }
+
+  async updateUserEmbedding(userId: number, embedding: number[]): Promise<void> {
+    try {
+      if (this.useDatabase) {
+        await this.databaseStorage.updateUserEmbedding(userId, embedding);
+        return;
+      }
+    } catch (error) {
+      log(`Database error, falling back to memory storage: ${error}`, 'storage');
+      this.setFallback();
+    }
+    await this.memStorage.updateUserEmbedding(userId, embedding);
+  }
+
+  async getUsersWithEmbeddings(): Promise<User[]> {
+    try {
+      if (this.useDatabase) {
+        return await this.databaseStorage.getUsersWithEmbeddings();
+      }
+    } catch (error) {
+      log(`Database error, falling back to memory storage: ${error}`, 'storage');
+      this.setFallback();
+    }
+    return await this.memStorage.getUsersWithEmbeddings();
   }
 }
 

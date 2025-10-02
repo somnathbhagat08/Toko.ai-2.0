@@ -12,6 +12,7 @@ import { phoneAuthService } from "./services/phoneAuth";
 import { aiProfileService } from "./services/aiProfile";
 import { moderationService } from "./services/moderation";
 import { presenceService } from "./services/presence";
+import { aiEmbeddingService } from "./services/aiEmbedding";
 
 // Store for matching users
 const waitingUsers = new Map();
@@ -107,6 +108,107 @@ export async function registerRoutes(app: Express): Promise<Server> {
       })),
       total: users.length
     });
+  });
+
+  // AI Embedding endpoints
+  app.get("/api/ai-embedding/status", (req, res) => {
+    const status = aiEmbeddingService.getStatus();
+    res.json(status);
+  });
+
+  app.post("/api/users/:id/generate-embedding", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      
+      if (isNaN(userId)) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+      }
+
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      if (!aiEmbeddingService.isServiceAvailable()) {
+        return res.status(503).json({ 
+          error: 'AI embedding service is currently unavailable',
+          fallbackMode: true
+        });
+      }
+
+      const embedding = await aiEmbeddingService.generateEmbedding(user);
+      
+      if (!embedding) {
+        return res.status(400).json({ 
+          error: 'Could not generate embedding. User may not have sufficient profile data.',
+          hint: 'Add bio, interests, or other profile information'
+        });
+      }
+
+      await storage.updateUserEmbedding(userId, embedding);
+
+      res.json({
+        success: true,
+        userId: userId,
+        embeddingDimensions: embedding.length,
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      monitoring.trackError('embedding_generation', error instanceof Error ? error.message : String(error));
+      res.status(500).json({ 
+        error: 'Failed to generate embedding',
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Batch generate embeddings for all users
+  app.post("/api/ai-embedding/batch-generate", async (req, res) => {
+    try {
+      if (!aiEmbeddingService.isServiceAvailable()) {
+        return res.status(503).json({ 
+          error: 'AI embedding service is currently unavailable' 
+        });
+      }
+
+      const users = await storage.getUsersWithEmbeddings();
+      const results = {
+        total: 0,
+        success: 0,
+        failed: 0,
+        skipped: 0
+      };
+
+      for (const user of users) {
+        results.total++;
+        
+        if (user.profileEmbedding) {
+          results.skipped++;
+          continue;
+        }
+
+        const embedding = await aiEmbeddingService.generateEmbedding(user);
+        
+        if (embedding) {
+          await storage.updateUserEmbedding(user.id, embedding);
+          results.success++;
+        } else {
+          results.failed++;
+        }
+      }
+
+      res.json({
+        success: true,
+        results
+      });
+    } catch (error) {
+      monitoring.trackError('batch_embedding_generation', error instanceof Error ? error.message : String(error));
+      res.status(500).json({ 
+        error: 'Failed to batch generate embeddings',
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
   });
 
   // Live platform statistics for homepage
@@ -521,24 +623,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
-    socket.on("typing-start", (data) => {
-      socket.to(data.roomId).emit("user-typing", { isTyping: true });
+    socket.on("typing-start", (roomId) => {
+      socket.to(roomId).emit("user-typing", { isTyping: true });
     });
 
-    socket.on("typing-stop", (data) => {
-      socket.to(data.roomId).emit("user-typing", { isTyping: false });
+    socket.on("typing-stop", (roomId) => {
+      socket.to(roomId).emit("user-typing", { isTyping: false });
     });
 
-    socket.on("leave-chat", (data) => {
-      socket.to(data.roomId).emit("stranger-disconnected");
-      socket.leave(data.roomId);
-      activeChats.delete(data.roomId);
+    socket.on("leave-chat", (roomId) => {
+      socket.to(roomId).emit("stranger-disconnected");
+      socket.leave(roomId);
+      activeChats.delete(roomId);
     });
 
-    socket.on("skip-chat", (data) => {
-      socket.to(data.roomId).emit("finding-new-match");
-      socket.leave(data.roomId);
-      activeChats.delete(data.roomId);
+    socket.on("skip-chat", (roomId) => {
+      socket.to(roomId).emit("finding-new-match");
+      socket.leave(roomId);
+      activeChats.delete(roomId);
     });
 
     // WebRTC signaling

@@ -43,6 +43,10 @@ export default function ChatInterface({ onDisconnect, chatMode, user, roomId, st
   const [isVideoHovered, setIsVideoHovered] = useState(false);
   const [isMatchingActive, setIsMatchingActive] = useState(false);
   const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [availableDevices, setAvailableDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedVideoDevice, setSelectedVideoDevice] = useState<string>('');
+  const [showDeviceSelector, setShowDeviceSelector] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -101,23 +105,54 @@ export default function ChatInterface({ onDisconnect, chatMode, user, roomId, st
     };
   }, []);
 
-  const initializeLocalCamera = async () => {
+  const enumerateDevices = async () => {
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+        console.error('enumerateDevices not supported');
+        return;
+      }
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      setAvailableDevices(videoDevices);
+      
+      if (videoDevices.length > 0 && !selectedVideoDevice) {
+        setSelectedVideoDevice(videoDevices[0].deviceId);
+      }
+      
+      console.log('Available video devices:', videoDevices);
+    } catch (error) {
+      console.error('Error enumerating devices:', error);
+    }
+  };
+
+  const initializeLocalCamera = async (deviceId?: string) => {
+    try {
+      setCameraError(null);
+      
       // Check if getUserMedia is available
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        console.error('getUserMedia not supported');
+        const errorMsg = 'Camera not supported on this browser. Please use a modern browser like Chrome, Firefox, or Safari.';
+        setCameraError(errorMsg);
         setIsVideoEnabled(false);
         setIsAudioEnabled(false);
         return;
       }
 
+      // Build video constraints
+      const videoConstraints: MediaTrackConstraints = {
+        width: { ideal: 640 }, 
+        height: { ideal: 480 },
+        facingMode: 'user'
+      };
+      
+      if (deviceId) {
+        videoConstraints.deviceId = { exact: deviceId };
+      }
+
       // Get user media for local preview (during matching)
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          width: { ideal: 640 }, 
-          height: { ideal: 480 },
-          facingMode: 'user'
-        }, 
+        video: videoConstraints, 
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
@@ -137,8 +172,34 @@ export default function ChatInterface({ onDisconnect, chatMode, user, roomId, st
       setIsAudioEnabled(audioTracks.length > 0 && audioTracks[0].enabled);
       
       console.log('Local camera initialized successfully');
-    } catch (error) {
+      
+      // Enumerate devices after successful camera access
+      await enumerateDevices();
+    } catch (error: any) {
       console.error('Error initializing local camera:', error);
+      
+      // Set user-friendly error messages
+      let errorMsg = 'Unable to access camera. ';
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        errorMsg += 'Camera permission was denied. Please allow camera access in your browser settings.';
+      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+        errorMsg += 'No camera found. Please connect a camera and try again.';
+      } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+        errorMsg += 'Camera is already in use by another application. Please close other apps using the camera.';
+      } else if (error.name === 'OverconstrainedError') {
+        errorMsg += 'Camera constraints not supported. Trying fallback...';
+        
+        // Try again without device constraint
+        if (deviceId) {
+          await initializeLocalCamera();
+          return;
+        }
+      } else {
+        errorMsg += error.message || 'Unknown error occurred.';
+      }
+      
+      setCameraError(errorMsg);
+      
       // Fallback to audio only if video fails
       try {
         const audioStream = await navigator.mediaDevices.getUserMedia({ 
@@ -153,6 +214,7 @@ export default function ChatInterface({ onDisconnect, chatMode, user, roomId, st
         console.error('Error accessing audio:', audioError);
         setIsVideoEnabled(false);
         setIsAudioEnabled(false);
+        setCameraError(errorMsg + ' Audio also unavailable.');
       }
     }
   };
@@ -192,8 +254,8 @@ export default function ChatInterface({ onDisconnect, chatMode, user, roomId, st
       setConnectionStatus('stranger_disconnected');
       setIsWaitingForMatch(false);
       if (chatMode === 'video') {
-        // Keep local stream active but cleanup remote connection
-        webrtcService.cleanup();
+        // Keep socket handlers active, cleanup peer connection for new match
+        webrtcService.cleanupForNewMatch();
         setRemoteStream(null);
       }
     });
@@ -204,8 +266,8 @@ export default function ChatInterface({ onDisconnect, chatMode, user, roomId, st
       setMessages([]);
       setCurrentStranger(null);
       if (chatMode === 'video') {
-        // Keep local stream active but cleanup remote connection
-        webrtcService.cleanup();
+        // Keep socket handlers active, cleanup peer connection for new match
+        webrtcService.cleanupForNewMatch();
         setRemoteStream(null);
       }
     });
@@ -460,6 +522,19 @@ export default function ChatInterface({ onDisconnect, chatMode, user, roomId, st
     }
   };
 
+  const handleDeviceChange = async (deviceId: string) => {
+    setSelectedVideoDevice(deviceId);
+    
+    // Stop current stream
+    if (localStream) {
+      localStream.getTracks().forEach(track => track.stop());
+    }
+    
+    // Initialize with new device
+    await initializeLocalCamera(deviceId);
+    setShowDeviceSelector(false);
+  };
+
   const sendMessage = () => {
     if (!inputValue.trim() || connectionStatus !== 'connected' || !currentRoomId) return;
 
@@ -502,7 +577,8 @@ export default function ChatInterface({ onDisconnect, chatMode, user, roomId, st
       setOverlayMessages([]);
 
       if (chatMode === 'video') {
-        webrtcService.cleanup();
+        // Keep socket handlers active for new match
+        webrtcService.cleanupForNewMatch();
         setRemoteStream(null);
       }
 
@@ -530,7 +606,8 @@ export default function ChatInterface({ onDisconnect, chatMode, user, roomId, st
     setCurrentStranger(null);
 
     if (chatMode === 'video') {
-      webrtcService.cleanup();
+      // Keep socket handlers active for new match
+      webrtcService.cleanupForNewMatch();
       setRemoteStream(null);
     }
   };
@@ -921,6 +998,35 @@ export default function ChatInterface({ onDisconnect, chatMode, user, roomId, st
                   <div className={`absolute top-2 right-2 sm:top-4 sm:right-4 flex gap-1 sm:gap-2 z-20 transition-all duration-300 ${
                     isVideoHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
                   }`}>
+                    {/* Camera Device Selector */}
+                    {availableDevices.length > 1 && (
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowDeviceSelector(!showDeviceSelector)}
+                          className="bg-black text-white border-2 sm:border-3 border-black px-2 sm:px-3 py-2 sm:py-3 font-black transition-all shadow-[2px_2px_0px_0px_#666] sm:shadow-[3px_3px_0px_0px_#666] hover:bg-green-400 hover:shadow-[3px_3px_0px_0px_#00FF88] sm:hover:shadow-[4px_4px_0px_0px_#00FF88] hover:translate-x-[-1px] hover:translate-y-[-1px] active:bg-purple-500 active:shadow-[2px_2px_0px_0px_#8A2BE2] sm:active:shadow-[3px_3px_0px_0px_#8A2BE2] touch-manipulation"
+                          data-testid="button-camera-selector"
+                        >
+                          <Video className="w-4 h-4 sm:w-5 sm:h-5" />
+                        </button>
+                        {showDeviceSelector && (
+                          <div className="absolute top-full right-0 mt-1 sm:mt-2 bg-white border-2 sm:border-3 border-black shadow-[3px_3px_0px_0px_#000] sm:shadow-[4px_4px_0px_0px_#000] p-1 sm:p-2 z-50 min-w-[180px] max-w-[250px]">
+                            {availableDevices.map(device => (
+                              <button
+                                key={device.deviceId}
+                                onClick={() => handleDeviceChange(device.deviceId)}
+                                className={`block w-full text-left px-2 py-1.5 sm:py-1 font-bold hover:bg-green-400 hover:text-black transition-colors text-xs touch-manipulation truncate ${
+                                  selectedVideoDevice === device.deviceId ? 'bg-black text-white' : 'text-black'
+                                }`}
+                                data-testid={`button-device-${device.deviceId}`}
+                              >
+                                {device.label || `Camera ${availableDevices.indexOf(device) + 1}`}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Beauty Filter Button */}
                     <button
                       onClick={() => setBeautyFilterEnabled(!beautyFilterEnabled)}
@@ -929,6 +1035,7 @@ export default function ChatInterface({ onDisconnect, chatMode, user, roomId, st
                           ? 'bg-black text-white hover:bg-green-400 hover:shadow-[3px_3px_0px_0px_#00FF88] sm:hover:shadow-[4px_4px_0px_0px_#00FF88] active:bg-purple-500 active:shadow-[2px_2px_0px_0px_#8A2BE2] sm:active:shadow-[3px_3px_0px_0px_#8A2BE2]' 
                           : 'bg-gray-300 text-black hover:bg-green-400 hover:shadow-[3px_3px_0px_0px_#00FF88] sm:hover:shadow-[4px_4px_0px_0px_#00FF88] active:bg-purple-500 active:shadow-[2px_2px_0px_0px_#8A2BE2] sm:active:shadow-[3px_3px_0px_0px_#8A2BE2]'
                       }`}
+                      data-testid="button-beauty-filter"
                     >
                       <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
@@ -987,14 +1094,29 @@ export default function ChatInterface({ onDisconnect, chatMode, user, roomId, st
                   </div>
 
                   <div className="w-full h-full relative">
-                    {localStream ? (
+                    {cameraError ? (
+                      <div className="w-full h-full flex items-center justify-center p-4">
+                        <div className="bg-red-500 border-3 border-black p-4 shadow-[4px_4px_0px_0px_#000] max-w-md">
+                          <p className="text-white font-black text-sm mb-3">{cameraError}</p>
+                          <button
+                            onClick={() => initializeLocalCamera()}
+                            className="bg-white text-black border-2 border-black px-3 py-2 font-black shadow-[2px_2px_0px_0px_#000] hover:bg-green-400 transition-all"
+                            data-testid="button-retry-camera"
+                          >
+                            RETRY
+                          </button>
+                        </div>
+                      </div>
+                    ) : localStream ? (
                       <>
                         <video
                           ref={localVideoRef}
                           autoPlay
+                          playsInline
                           muted
                           className="w-full h-full object-cover"
                           style={{ display: beautyFilterEnabled || selectedBackground !== 'none' ? 'none' : 'block' }}
+                          data-testid="video-local"
                         />
                         <canvas
                           ref={canvasRef}
@@ -1036,7 +1158,9 @@ export default function ChatInterface({ onDisconnect, chatMode, user, roomId, st
                       <video
                         ref={remoteVideoRef}
                         autoPlay
+                        playsInline
                         className="w-full h-full object-cover"
+                        data-testid="video-remote"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">

@@ -1,6 +1,7 @@
 import { redisManager } from '../redis.js';
 import { monitoring } from '../monitoring.js';
 import { log } from '../vite.js';
+import { aiEmbeddingService } from './aiEmbedding.js';
 
 interface UserProfile {
   id: string;
@@ -19,6 +20,7 @@ interface UserProfile {
     language?: string;
     verified?: boolean;
   };
+  profileEmbedding?: number[];
   joinedAt: number;
 }
 
@@ -174,13 +176,36 @@ class MatchmakingService {
       criteria.push('verified');
     }
 
-    // 7. Wait time bonus (helps people who have been waiting longer)
+    // 7. AI embedding similarity (if available)
+    if (user1.profileEmbedding && user2.profileEmbedding && aiEmbeddingService.isServiceAvailable()) {
+      const aiSimilarity = aiEmbeddingService.calculateCosineSimilarity(
+        user1.profileEmbedding,
+        user2.profileEmbedding
+      );
+      
+      // Weight AI similarity with 3 points (significant factor)
+      const aiScore = aiSimilarity * 3;
+      score += aiScore;
+      
+      if (aiSimilarity > 0.7) {
+        criteria.push('ai_high_match');
+      } else if (aiSimilarity > 0.5) {
+        criteria.push('ai_moderate_match');
+      }
+      
+      log(`AI similarity between ${user1.id} and ${user2.id}: ${(aiSimilarity * 100).toFixed(1)}%`, 'matchmaking');
+    }
+
+    // 8. Wait time bonus (helps people who have been waiting longer)
     const avgWaitTime = (Date.now() - user1.joinedAt + Date.now() - user2.joinedAt) / 2;
     const waitBonus = Math.min(1, avgWaitTime / (60000 * 2)); // Max bonus after 2 minutes
     score += waitBonus;
 
+    // Adjust max score to account for AI similarity
+    const adjustedMaxScore = user1.profileEmbedding && user2.profileEmbedding ? 13 : 10;
+
     return {
-      compatibility: Math.min(1, score / maxScore),
+      compatibility: Math.min(1, score / adjustedMaxScore),
       criteria
     };
   }
@@ -193,10 +218,10 @@ class MatchmakingService {
 
     // Check if preferences match available genders
     const user1Compatible = !user1.genderPreference || 
-      (user2.gender && user1.genderPreference === user2.gender);
+      (!!user2.gender && user1.genderPreference === user2.gender);
     
     const user2Compatible = !user2.genderPreference || 
-      (user1.gender && user2.genderPreference === user1.gender);
+      (!!user1.gender && user2.genderPreference === user1.gender);
 
     return user1Compatible && user2Compatible;
   }

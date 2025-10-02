@@ -1,0 +1,91 @@
+Prompt for Replit assistant — task: fix camera + matchmaking AI + UI + deploy
+
+Goal
+- Fix video call camera so user sees themselves.
+- Build a multi-layer free-AI matchmaking pipeline that matches by "vibe".
+- Add a short 2-sentence AI-generated profile summary at top that blends with UI and is created from selected options.
+- Improve options diversity, fix homepage layout bugs and background animation, fix buttons overlapping, wire servers for deployment and WebRTC signaling.
+
+Environment / stack (use these or equivalent)
+- Frontend: React (or existing app framework in workspace)
+- Backend: Node.js + Express (signaling via socket.io)
+- WebRTC for video (STUN: stun:stun.l.google.com:19302; production: coturn)
+- Free AI models (Hugging Face / transformers):
+  - Embeddings: sentence-transformers/all-MiniLM-L6-v2
+  - Matching/classifier: a lightweight finetuned transformer or clustering on embeddings
+  - Generator/profile: google/flan-t5-small (or t5-small) for generating 2-sentence vibes
+- Deployment: Replit or Render / Vercel for frontend; Heroku alternative. Use environment variables for keys.
+- Storage: simple Postgres or Redis for sessions (optional)
+
+Tasks (ordered)
+1. Camera fixes (acceptance: local preview shows user camera immediately on video call open)
+   - Ensure secure context (HTTPS) or use localhost.
+   - Call navigator.mediaDevices.getUserMedia({ video: true, audio: true }) with correct constraints.
+   - Attach stream to <video autoplay playsInline muted ref=...>.
+   - Handle permission errors, fallback devices, enumerateDevices() and let user pick camera.
+   - Ensure correct element sizing and CSS (object-fit: cover) so preview is visible.
+
+2. WebRTC + Signaling + TURN/STUN (acceptance: two clients can connect; offer/answer via socket.io)
+   - Implement socket.io signaling endpoints in server.
+   - Use Google STUN; add Coturn instructions for production.
+   - Keep ephemeral session IDs for pairing.
+
+3. Matchmaking AI (acceptance: matches have higher embedding similarity and use selected options)
+   - Pipeline:
+     - Convert user options + short free-text to a single text string.
+     - Create embedding via sentence-transformers/all-MiniLM-L6-v2.
+     - Store embeddings in DB (or in-memory Faiss / Annoy on small scale).
+     - During match, compute cosine similarity and return top candidate of opposite gender (if required).
+     - Add simple clustering / k-NN fallback to ensure vibe similarity.
+   - Multi-layer approach:
+     - Layer 1: rule filter (gender/opposite-gender free).
+     - Layer 2: embedding similarity.
+     - Layer 3: re-ranker using lightweight sentiment/personality classifier or heuristic weightings.
+
+4. Profile summary generation (acceptance: displays 2-sentence summary based on selected options)
+   - Use flan-t5-small to generate 2-sentence “vibe” given the selected buttons/options and embedding tags.
+   - Keep length constraint, safe content filters.
+   - Render at top of chat area with small card that matches app colors and rounded styling.
+
+5. Make options more diverse
+   - Add categories and fewer overlapping options; add slider scales (0-10) for intensity.
+   - Add multi-select and short free-text to capture nuance.
+
+6. UI layout + background animation fixes (acceptance: no button overlap, background animates smoothly)
+   - Fix overlapping: inspect container padding/margins; use Flexbox/ Grid; ensure bottom controls have safe-area inset.
+   - For background movement: prefer CSS transform + will-change or requestAnimationFrame; reduce repaints, use translateZ(0) if needed.
+   - Ensure z-index of bottom box is above background but below controls.
+   - Add responsive breakpoints so end buttons don't touch box; add bottom margin equal to control height.
+
+7. Tests & QA
+   - Add unit tests for embedding flow and server signaling handshake.
+   - Add integration manual steps: open two tabs, allow camera, start call, verify preview + connection.
+
+8. Deployment (acceptance: app deploys; signaling reachable; environment vars documented)
+   - Expose server on port from process.env.PORT.
+   - Document required env: HF_TOKEN (optional), TURN credentials, NODE_ENV.
+   - Provide run scripts: npm start / npm run dev.
+
+Deliverables (what to produce in Replit)
+- Code changes with comments for:
+  - src/components/VideoCall.* (getUserMedia + attach stream + UI)
+  - src/styles/home.css (layout fixes)
+  - server/index.js (socket.io signaling + embed endpoints)
+  - ai/matchmaker.js (embedding, matching, generator calls using HF or transformers)
+- README with setup, env vars, and deployment steps.
+- Short test plan and acceptance checklist.
+- Small sample UI mock or CSS snippet for profile card.
+
+Safety / privacy
+- Ask user consent before sending camera stream to server.
+- Do not store raw video; only signaling metadata on server.
+- Filter outputs for sensitive content.
+
+Example prompt to paste into the Replit assistant
+- Start with: "Fix camera preview, add matchmaking AI pipeline and profile generator, fix UI overlap and background animation, implement signaling server, use HF free models: all-MiniLM-L6-v2 and flan-t5-small. Produce code changes, tests, README, and deployment steps. Prioritize local testing with two browser tabs and document required env vars."
+
+Ask me for:
+- The project entry files (paths to main frontend file and server file) and the attached screenshot/file that shows overlapping buttons so I can patch exact CSS.
+- Whether you prefer Hugging Face Inference API or local transformers usage.
+
+End.
