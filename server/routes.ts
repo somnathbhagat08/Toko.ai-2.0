@@ -318,7 +318,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const loginResult = await authService.register({
         phoneNumber: userData.phoneNumber,
         name: userData.name,
-        gender: userData.gender,
         avatar: userData.avatar ?? undefined,
         provider: userData.provider ?? undefined,
         age: userData.age ?? undefined,

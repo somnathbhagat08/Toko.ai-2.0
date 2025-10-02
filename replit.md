@@ -96,3 +96,61 @@ Preferred communication style: Simple, everyday language.
 - **Monitoring Services**: External APM and logging services (configurable)
 
 The application is designed with graceful degradation in mind, ensuring core functionality works even when optional services are unavailable.
+
+## Replit Environment Setup
+
+### Current Configuration
+
+The application has been configured to run in the Replit environment with the following setup:
+
+#### Workflow Configuration
+- **Name**: Start application
+- **Command**: `npm run dev`
+- **Port**: 5000 (frontend server with Vite HMR)
+- **Host**: 0.0.0.0 (configured for Replit proxy)
+- **Output Type**: webview
+
+#### Development Server
+- Express server runs on port 5000 with 0.0.0.0 binding
+- Vite dev server integrated with `allowedHosts: true` for Replit's iframe proxy
+- Hot Module Replacement (HMR) enabled via Vite middleware
+- Server automatically reloads on file changes
+
+#### Storage Configuration
+- **Development Mode**: Uses in-memory storage (MemStorage) for rapid development
+- **Database Support**: PostgreSQL connection via DATABASE_URL environment variable
+- **Fallback Mechanism**: Graceful fallback to in-memory storage if DATABASE_URL is not configured
+- To use persistent PostgreSQL storage, set the DATABASE_URL environment variable
+
+#### Optional Services Status
+- **Redis**: Not configured (running without Redis caching)
+- **LiveKit**: Running in development mode with default credentials
+- **OpenAI**: OPENAI_API_KEY not set (AI profiling disabled)
+- **JWT**: Using default secrets (should be changed in production)
+
+#### Code Quality
+- All TypeScript errors resolved
+- LSP diagnostics passing
+- Type-safe schema definitions in `shared/schema.ts`
+
+### Recent Changes
+
+**October 2, 2025** - Replit Environment Setup
+- Created .gitignore with Node.js patterns
+- Configured workflow for port 5000 with webview output
+- Fixed TypeScript errors related to deprecated schema fields (removed `gender` and `country` references)
+- Updated MemStorage to use current schema fields (currentVibe, vibePreferences, conversationMood)
+- Verified frontend loads correctly with phone authentication interface
+
+### Running the Application
+
+The application starts automatically via the configured workflow. To manually restart:
+```bash
+npm run dev
+```
+
+For production builds:
+```bash
+npm run build
+npm run start
+```

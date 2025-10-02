@@ -57,7 +57,6 @@ class AuthService {
   async register(userData: {
     phoneNumber: string;
     name: string;
-    gender: string;
     avatar?: string;
     provider?: string;
     age?: number;
